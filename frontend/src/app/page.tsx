@@ -59,9 +59,16 @@ export default function LandingPage() {
                 </div>
               </Link>
             </div>
+            
+            <div style={{ textAlign: "center", marginTop: 40 }}>
+              <Link href="/superadmin/login" style={{ fontSize: 13, textDecoration: "underline", color: "#AEB4D1", opacity: 0.6 }}>
+                Superadmin Portal
+              </Link>
+            </div>
           </div>
         </div>
       </div>
     </>
   );
 }
+
