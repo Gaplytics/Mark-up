@@ -10,6 +10,7 @@ export default function JuryDashboardPage() {
   
   const [juryTab, setJuryTab] = useState("overview");
   const [juryScores, setJuryScores] = useState<Record<string, number>>({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (!currentJury) {
@@ -61,7 +62,16 @@ export default function JuryDashboardPage() {
     <div id="screen-jury-app">
       <div className="app-shell">
         {/* Sidebar */}
-        <div className="sidebar">
+        <div className={`sidebar ${!isSidebarOpen ? "collapsed" : ""}`}>
+          <div style={{ display: "flex", justifyContent: isSidebarOpen ? "flex-end" : "center", marginBottom: 16 }}>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              style={{ background: "transparent", border: "none", color: "#C7CDE8", fontSize: 20, cursor: "pointer" }}
+              title="Toggle Sidebar"
+            >
+              ☰
+            </button>
+          </div>
           <div className="brand">
             <div className="mark">M</div>
             <div>
@@ -108,13 +118,13 @@ export default function JuryDashboardPage() {
                 {juryTab === "round2" && "Round 2 Reels"}
                 {juryTab === "round3" && "Round 3 Demo Day"}
               </h2>
-              <div className="sub">
-                {juryTab === "overview" && "Your assigned groups and pending reviews"}
-                {juryTab === "round1" && "Auto-scored from the individual test — view only"}
-                {juryTab === "round2" && "Review and approve each group's 90-second Reel"}
-                {juryTab === "round3" && "Review and score each group's live campaign film"}
+                <div className="sub">
+                  {juryTab === "overview" && "Your assigned groups and pending reviews"}
+                  {juryTab === "round1" && "Auto-scored from the individual test — view only"}
+                  {juryTab === "round2" && "Review and approve each group's 90-second Reel"}
+                  {juryTab === "round3" && "Review and score each group's live campaign film"}
+                </div>
               </div>
-            </div>
           </div>
 
           <div className="content">

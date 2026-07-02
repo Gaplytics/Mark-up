@@ -24,6 +24,7 @@ export default function SuperadminDashboardPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Authentication check
   useEffect(() => {
@@ -39,7 +40,7 @@ export default function SuperadminDashboardPage() {
   const loadColleges = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/colleges");
+      const res = await fetch("http://localhost:3001/api/colleges");
       const json = await res.json();
       if (json.success) {
         setColleges(json.data);
@@ -71,7 +72,7 @@ export default function SuperadminDashboardPage() {
     };
 
     try {
-      const res = await fetch("http://localhost:5000/api/colleges", {
+      const res = await fetch("http://localhost:3001/api/colleges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newCollege),
@@ -104,7 +105,16 @@ export default function SuperadminDashboardPage() {
     <div id="screen-superadmin-dashboard">
       <div className="app-shell">
         {/* Sidebar */}
-        <div className="sidebar">
+        <div className={`sidebar ${!isSidebarOpen ? "collapsed" : ""}`}>
+          <div style={{ display: "flex", justifyContent: isSidebarOpen ? "flex-end" : "center", marginBottom: 16 }}>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              style={{ background: "transparent", border: "none", color: "#C7CDE8", fontSize: 20, cursor: "pointer" }}
+              title="Toggle Sidebar"
+            >
+              ☰
+            </button>
+          </div>
           <div className="brand">
             <div className="mark">M</div>
             <div>

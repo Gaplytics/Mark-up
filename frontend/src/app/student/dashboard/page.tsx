@@ -9,6 +9,7 @@ export default function StudentDashboardPage() {
   const { groups, setGroups, currentStudent, setCurrentStudent, rounds, addToast, slotInfo } = useStateContext();
   
   const [studentTab, setStudentTab] = useState("home");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState<Record<number, number>>({});
@@ -102,7 +103,16 @@ export default function StudentDashboardPage() {
     <div id="screen-student-app">
       <div className="app-shell">
         {/* Sidebar */}
-        <div className="sidebar">
+        <div className={`sidebar ${!isSidebarOpen ? "collapsed" : ""}`}>
+          <div style={{ display: "flex", justifyContent: isSidebarOpen ? "flex-end" : "center", marginBottom: 16 }}>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              style={{ background: "transparent", border: "none", color: "#C7CDE8", fontSize: 20, cursor: "pointer" }}
+              title="Toggle Sidebar"
+            >
+              ☰
+            </button>
+          </div>
           <div className="brand">
             <div className="mark">M</div>
             <div>
@@ -152,10 +162,10 @@ export default function StudentDashboardPage() {
               <div className="sub">
                 {studentTab === "home" && "Your test slot and round status"}
                 {studentTab === "round1" && "Available only during your assigned slot, after Round 1 is flagged off"}
-                {studentTab === "round2" && "Upload your group's 90-second Reel or Short"}
-                {studentTab === "round3" && "Upload your group's 60-second co-created film"}
+                  {studentTab === "round2" && "Upload your group's 90-second Reel or Short"}
+                  {studentTab === "round3" && "Upload your group's 60-second co-created film"}
+                </div>
               </div>
-            </div>
           </div>
 
           <div className="content">

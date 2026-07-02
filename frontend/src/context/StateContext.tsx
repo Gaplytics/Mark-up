@@ -134,6 +134,8 @@ interface StateContextProps {
 
   collegeAdminName: string;
   setCollegeAdminName: React.Dispatch<React.SetStateAction<string>>;
+  collegeAdminId: string;
+  setCollegeAdminId: React.Dispatch<React.SetStateAction<string>>;
   currentJury: Judge | null;
   setCurrentJury: React.Dispatch<React.SetStateAction<Judge | null>>;
   currentStudent: { groupId: string; memberIdx: number; phone: string; name: string } | null;
@@ -151,11 +153,7 @@ const StateContext = createContext<StateContextProps | undefined>(undefined);
 
 export function StateProvider({ children }: { children: React.ReactNode }) {
   const [groups, setGroups] = useState<Group[]>([]);
-  const [judges, setJudges] = useState<Judge[]>([
-    { id: "J1", name: "Dr. Kavita Rao", email: "kavita.rao@alliance.edu.in", dept: "Marketing" },
-    { id: "J2", name: "Prof. Sameer Bhatt", email: "sameer.bhatt@alliance.edu.in", dept: "Strategy" },
-    { id: "J3", name: "Dr. Leela Krishnan", email: "leela.k@alliance.edu.in", dept: "Digital Media" },
-  ]);
+  const [judges, setJudges] = useState<Judge[]>([]);
   const [slots] = useState<Slot[]>([
     { id: "S1", label: "Day 1 · 9:00 – 10:30 AM", capacity: 40 },
     { id: "S2", label: "Day 1 · 11:00 – 12:30 PM", capacity: 40 },
@@ -170,8 +168,30 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   const [gaplytiqUploadRequested, setGaplytiqUploadRequested] = useState(false);
 
   const [collegeAdminName, setCollegeAdminName] = useState("Alliance University");
+  const [collegeAdminId, setCollegeAdminId] = useState("");
   const [currentJury, setCurrentJury] = useState<Judge | null>(null);
   const [currentStudent, setCurrentStudent] = useState<{ groupId: string; memberIdx: number; phone: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedName = localStorage.getItem("collegeAdminName");
+      const savedId = localStorage.getItem("collegeAdminId");
+      if (savedName) setCollegeAdminName(savedName);
+      if (savedId) setCollegeAdminId(savedId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && collegeAdminName) {
+      localStorage.setItem("collegeAdminName", collegeAdminName);
+    }
+  }, [collegeAdminName]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && collegeAdminId) {
+      localStorage.setItem("collegeAdminId", collegeAdminId);
+    }
+  }, [collegeAdminId]);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = (msg: string, type?: "success" | "error", title?: string) => {
@@ -184,6 +204,19 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setGroups(buildSeedGroups());
+
+    const fetchJudges = async () => {
+      try {
+        const res = await fetch("http://localhost:3001/api/judges");
+        const json = await res.json();
+        if (json.success) {
+          setJudges(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to load judges:", err);
+      }
+    };
+    fetchJudges();
   }, []);
 
   const slotInfo = (slotId: string | null) => {
@@ -214,6 +247,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         rounds, setRounds,
         gaplytiqUploadRequested, setGaplytiqUploadRequested,
         collegeAdminName, setCollegeAdminName,
+        collegeAdminId, setCollegeAdminId,
         currentJury, setCurrentJury,
         currentStudent, setCurrentStudent,
         toasts, addToast,

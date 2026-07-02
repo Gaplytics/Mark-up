@@ -22,7 +22,7 @@ const EyeOffIcon = () => (
 
 export default function CollegeLoginPage() {
   const router = useRouter();
-  const { addToast, setCollegeAdminName } = useStateContext();
+  const { addToast, setCollegeAdminName, setCollegeAdminId } = useStateContext();
   
   const [loginCollegeEmail, setLoginCollegeEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -30,7 +30,7 @@ export default function CollegeLoginPage() {
 
   const handleCollegeLogin = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/colleges/validate", {
+      const res = await fetch("http://localhost:3001/api/colleges/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginCollegeEmail.toLowerCase(), password: loginPassword }),
@@ -39,6 +39,7 @@ export default function CollegeLoginPage() {
       
       if (json.success && json.college) {
         setCollegeAdminName(json.college.name);
+        setCollegeAdminId(json.college.id);
         addToast("Welcome back — ", "success", `Signed in as ${json.college.name}`);
         router.push("/college/dashboard");
         return;

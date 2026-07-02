@@ -8,6 +8,7 @@ export default function CollegeDashboardPage() {
   const router = useRouter();
   const {
     collegeAdminName,
+    collegeAdminId,
     groups, setGroups,
     judges, setJudges,
     slots,
@@ -18,6 +19,7 @@ export default function CollegeDashboardPage() {
   } = useStateContext();
 
   const [collegeTab, setCollegeTab] = useState("overview");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupMembers, setNewGroupMembers] = useState([
@@ -81,22 +83,49 @@ export default function CollegeDashboardPage() {
   const [newJudgeEmail, setNewJudgeEmail] = useState("");
   const [newJudgeDept, setNewJudgeDept] = useState("");
 
-  const handleAddJudge = () => {
+  const handleAddJudge = async () => {
     if (!newJudgeName.trim() || !newJudgeEmail.trim()) {
       addToast("Name and email are required.", "error", "Missing info — ");
       return;
     }
-    const newJ: Judge = {
-      id: "J" + (judges.length + 1),
-      name: newJudgeName.trim(),
-      email: newJudgeEmail.trim(),
-      dept: newJudgeDept.trim() || "Marketing",
-    };
-    setJudges([...judges, newJ]);
-    addToast(newJudgeName + " can now sign in to the Jury portal.", "success", "Judge appointed — ");
-    setNewJudgeName("");
-    setNewJudgeEmail("");
-    setNewJudgeDept("");
+
+    if (!collegeAdminId) {
+      addToast("Session expired. Please log out and sign in again.", "error", "Missing ID — ");
+      return;
+    }
+
+    try {
+      const res = await fetch("http://localhost:3001/api/judges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newJudgeName.trim(),
+          email: newJudgeEmail.trim().toLowerCase(),
+          dept: newJudgeDept.trim() || "Marketing",
+          college_id: collegeAdminId,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        addToast(newJudgeName + " appointed successfully! Invitation email sent.", "success", "Judge appointed — ");
+        setNewJudgeName("");
+        setNewJudgeEmail("");
+        setNewJudgeDept("");
+        
+        // Refresh judges list from database
+        const freshRes = await fetch("http://localhost:3001/api/judges");
+        const freshJson = await freshRes.json();
+        if (freshJson.success) {
+          setJudges(freshJson.data);
+        }
+      } else {
+        addToast(`Failed to appoint judge: ${json.error}`, "error", "Appointment failed");
+      }
+    } catch (err) {
+      addToast("Network error: Could not connect to backend.", "error", "Appointment failed");
+    }
   };
 
   const handleRemoveJudge = (id: string) => {
@@ -125,7 +154,16 @@ export default function CollegeDashboardPage() {
     <div id="screen-college-app">
       <div className="app-shell">
         {/* Sidebar */}
-        <div className="sidebar">
+        <div className={`sidebar ${!isSidebarOpen ? "collapsed" : ""}`}>
+          <div style={{ display: "flex", justifyContent: isSidebarOpen ? "flex-end" : "center", marginBottom: 16 }}>
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              style={{ background: "transparent", border: "none", color: "#C7CDE8", fontSize: 20, cursor: "pointer" }}
+              title="Toggle Sidebar"
+            >
+              ☰
+            </button>
+          </div>
           <div className="brand">
             <div className="mark">M</div>
             <div>
@@ -181,9 +219,9 @@ export default function CollegeDashboardPage() {
                 {collegeTab === "groups" && "Upload student groups yourself, or ask Gaplytiq to do it for you"}
                 {collegeTab === "judges" && "Add School of Business faculty to the jury panel"}
                 {collegeTab === "rounds" && "Flag off and close each round when your campus is ready"}
-                {collegeTab === "dashboard" && "Real-time participation and scores, by group"}
+                  {collegeTab === "dashboard" && "Real-time participation and scores, by group"}
+                </div>
               </div>
-            </div>
             <div style={{ display: "flex", gap: 10 }}>
               <StatusBadge status={rounds.round1 === "not-started" ? "not-started" : rounds.round1 === "live" ? "live" : "closed"} />
             </div>
