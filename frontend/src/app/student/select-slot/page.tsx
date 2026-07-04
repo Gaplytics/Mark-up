@@ -22,11 +22,7 @@ function SelectSlotContent() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  const slots = [
-    { id: "S1", time: "3:00 PM – 4:00 PM", name: "Afternoon Slot" },
-    { id: "S2", time: "5:00 PM – 6:00 PM", name: "Twilight Slot" },
-    { id: "S3", time: "7:00 PM – 8:00 PM", name: "Evening Slot" },
-  ];
+  const [slots, setSlots] = useState<any[]>([]);
 
   useEffect(() => {
     if (!studentId) {
@@ -54,7 +50,20 @@ function SelectSlotContent() {
       }
     };
 
+    const fetchSlots = async () => {
+      try {
+        const res = await fetch("http://localhost:3001/api/slots");
+        const data = await res.json();
+        if (data.success) {
+          setSlots(data.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch slots");
+      }
+    };
+
     fetchStudent();
+    fetchSlots();
   }, [studentId]);
 
   const handleSubmit = async () => {
@@ -152,29 +161,36 @@ function SelectSlotContent() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 }}>
           {slots.map((s) => {
+            const isFull = s.filled >= s.capacity;
             const isSelected = selectedSlot === s.id;
             return (
               <div
                 key={s.id}
-                onClick={() => setSelectedSlot(s.id)}
+                onClick={() => {
+                  if (!isFull) setSelectedSlot(s.id);
+                }}
                 style={{
                   padding: "16px 20px",
                   border: isSelected ? "2px solid var(--coral)" : "1px solid var(--line)",
                   borderRadius: 12,
-                  background: isSelected ? "#FFF9F9" : "#ffffff",
-                  cursor: "pointer",
+                  background: isSelected ? "#FFF9F9" : (isFull ? "#f5f5f5" : "#ffffff"),
+                  cursor: isFull ? "not-allowed" : "pointer",
                   display: "flex",
                   justifyContent: "between",
                   alignItems: "center",
                   transition: "all 0.2s ease",
+                  opacity: isFull && !isSelected ? 0.6 : 1
                 }}
               >
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: isSelected ? "var(--coral)" : "var(--slate-2)", letterSpacing: 0.5 }}>
-                    {s.name}
+                    Slot {s.id}
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 600, color: "var(--navy-2)", marginTop: 4 }}>
-                    {s.time}
+                    {s.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: isFull ? "var(--red)" : "var(--green)", marginTop: 4 }}>
+                    {isFull ? "Full" : `${s.filled}/${s.capacity} Filled`}
                   </div>
                 </div>
                 <div style={{

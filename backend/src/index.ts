@@ -588,6 +588,47 @@ app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> =
   }
 });
 
+// Get all slots with capacity info
+app.get('/api/slots', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { data: slots, error: slotsError } = await supabaseAdmin
+      .from('slots')
+      .select('*')
+      .order('id');
+      
+    if (slotsError) {
+      return res.status(500).json({ success: false, error: slotsError.message });
+    }
+
+    const { data: students, error: studentsError } = await supabaseAdmin
+      .from('students')
+      .select('slot_id');
+
+    if (studentsError) {
+      return res.status(500).json({ success: false, error: studentsError.message });
+    }
+
+    const slotCounts = (students || []).reduce((acc: any, curr: any) => {
+      if (curr.slot_id) {
+        acc[curr.slot_id] = (acc[curr.slot_id] || 0) + 1;
+      }
+      return acc;
+    }, {});
+
+    const slotsWithAvailability = (slots || []).map((s: any) => ({
+      id: s.id,
+      label: s.label,
+      capacity: s.capacity,
+      filled: slotCounts[s.id] || 0
+    }));
+
+    return res.json({ success: true, data: slotsWithAvailability });
+  } catch (err: any) {
+    console.error("GET /api/slots error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Update student slot selection
 app.post('/api/students/:id/select-slot', async (req: Request, res: Response): Promise<any> => {
   const { id } = req.params;
@@ -598,18 +639,21 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
   }
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('students')
-      .update({ slot_id: slotId })
-      .eq('id', id)
-      .select();
+    const { data, error } = await supabaseAdmin.rpc('assign_student_slot', {
+      p_student_id: id,
+      p_slot_id: slotId
+    });
 
-    if (error || !data || data.length === 0) {
+    if (error) {
       console.error("Update slot error:", error);
-      return res.status(400).json({ success: false, error: 'Failed to update slot' });
+      return res.status(400).json({ success: false, error: 'Failed to update slot: ' + error.message });
     }
 
-    return res.json({ success: true, student: data[0] });
+    if (data && !data.success) {
+      return res.status(400).json({ success: false, error: data.error });
+    }
+
+    return res.json({ success: true, message: data?.message });
   } catch (err: any) {
     console.error("POST /api/students/:id/select-slot error:", err);
     return res.status(500).json({ success: false, error: err.message });

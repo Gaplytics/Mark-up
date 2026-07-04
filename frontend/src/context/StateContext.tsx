@@ -38,6 +38,7 @@ export interface Slot {
   id: string;
   label: string;
   capacity: number;
+  filled?: number;
 }
 
 export interface Toast {
@@ -117,11 +118,7 @@ const StateContext = createContext<StateContextProps | undefined>(undefined);
 export function StateProvider({ children }: { children: React.ReactNode }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
-  const [slots] = useState<Slot[]>([
-    { id: "S1", label: "3:00 PM – 4:00 PM", capacity: 40 },
-    { id: "S2", label: "5:00 PM – 6:00 PM", capacity: 40 },
-    { id: "S3", label: "7:00 PM – 8:00 PM", capacity: 40 },
-  ]);
+  const [slots, setSlots] = useState<Slot[]>([]);
   const [rounds, setRounds] = useState<Record<string, "not-started" | "live" | "closed">>({
     round1: "not-started",
     round2: "not-started",
@@ -178,6 +175,21 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
       }
     };
     fetchJudges();
+  }, []);
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const res = await fetch("http://localhost:3001/api/slots");
+        const json = await res.json();
+        if (json.success) {
+          setSlots(json.data);
+        }
+      } catch (err) {
+        console.error("Failed to load slots:", err);
+      }
+    };
+    fetchSlots();
   }, []);
 
   useEffect(() => {

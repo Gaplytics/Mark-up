@@ -523,24 +523,14 @@ export default function CollegeDashboardPage() {
                     <div className="section-title">Slot Selection Summary</div>
                     <div className="section-desc">Real-time slot choices selected by students.</div>
                     <div className="stack" style={{ marginTop: 6 }}>
-                      <div className="row-between" style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
-                        <span>3:00 PM – 4:00 PM</span>
-                        <strong style={{ fontSize: 13, color: "var(--coral)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => { setTeamFormationSlot("S1"); setCollegeTab("teams"); }}>
-                          {students.filter(s => s.slotId === "S1").length} students <span>→</span>
-                        </strong>
-                      </div>
-                      <div className="row-between" style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
-                        <span>5:00 PM – 6:00 PM</span>
-                        <strong style={{ fontSize: 13, color: "var(--coral)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => { setTeamFormationSlot("S2"); setCollegeTab("teams"); }}>
-                          {students.filter(s => s.slotId === "S2").length} students <span>→</span>
-                        </strong>
-                      </div>
-                      <div className="row-between" style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
-                        <span>7:00 PM – 8:00 PM</span>
-                        <strong style={{ fontSize: 13, color: "var(--coral)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => { setTeamFormationSlot("S3"); setCollegeTab("teams"); }}>
-                          {students.filter(s => s.slotId === "S3").length} students <span>→</span>
-                        </strong>
-                      </div>
+                      {slots.map(slot => (
+                        <div key={slot.id} className="row-between" style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
+                          <span>{slot.label}</span>
+                          <strong style={{ fontSize: 13, color: "var(--coral)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => { setTeamFormationSlot(slot.id); setCollegeTab("teams"); }}>
+                            {students.filter(s => s.slotId === slot.id).length} students <span>→</span>
+                          </strong>
+                        </div>
+                      ))}
                       <div className="row-between" style={{ fontSize: 12, color: "var(--slate-2)", padding: "4px 8px" }}>
                         <span>Unassigned / Pending</span>
                         <span>{students.filter(s => !s.slotId).length} students</span>
