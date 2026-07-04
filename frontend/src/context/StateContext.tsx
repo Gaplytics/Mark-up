@@ -183,7 +183,18 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch("http://localhost:3001/api/slots");
         const json = await res.json();
         if (json.success) {
-          setSlots(json.data);
+          const parseTime = (label: string) => {
+            const match = label.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (!match) return 0;
+            let h = parseInt(match[1], 10);
+            const m = parseInt(match[2], 10);
+            const isPM = match[3].toUpperCase() === "PM";
+            if (h === 12 && !isPM) h = 0;
+            if (h !== 12 && isPM) h += 12;
+            return h * 60 + m;
+          };
+          const sortedSlots = json.data.sort((a: any, b: any) => parseTime(a.label) - parseTime(b.label));
+          setSlots(sortedSlots);
         }
       } catch (err) {
         console.error("Failed to load slots:", err);

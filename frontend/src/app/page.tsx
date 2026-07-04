@@ -23,7 +23,7 @@ export default function LandingPage() {
               </div>
               <div className="pill-row" style={{ marginTop: 0, alignItems: "center" }}>
                 <img src="/allianceuniversity.png" alt="Alliance University" style={{ height: 38, objectFit: "contain" }} />
-                <img src="/gaplytiq.png" alt="Powered by Gaplytiq" style={{ height: 32, objectFit: "contain" }} />
+                <img src="/gaplytiq.png" alt="Powered by Gaplytiq" style={{ height: 80, objectFit: "contain" }} />
               </div>
             </div>
 

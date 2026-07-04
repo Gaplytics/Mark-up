@@ -34,6 +34,8 @@ export default function CollegeDashboardPage() {
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [studentToRemove, setStudentToRemove] = useState<string | null>(null);
   const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState(false);
+  const [showUnassignedModal, setShowUnassignedModal] = useState(false);
+  const [showSlotModal, setShowSlotModal] = useState<string | null>(null);
 
   const handleAddStudent = async () => {
     if (!newStudent.name.trim() || !newStudent.email.trim() || !newStudent.phone.trim()) {
@@ -523,17 +525,128 @@ export default function CollegeDashboardPage() {
                     <div className="section-title">Slot Selection Summary</div>
                     <div className="section-desc">Real-time slot choices selected by students.</div>
                     <div className="stack" style={{ marginTop: 6 }}>
-                      {slots.map(slot => (
-                        <div key={slot.id} className="row-between" style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
-                          <span>{slot.label}</span>
-                          <strong style={{ fontSize: 13, color: "var(--coral)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => { setTeamFormationSlot(slot.id); setCollegeTab("teams"); }}>
-                            {students.filter(s => s.slotId === slot.id).length} students <span>→</span>
-                          </strong>
-                        </div>
-                      ))}
-                      <div className="row-between" style={{ fontSize: 12, color: "var(--slate-2)", padding: "4px 8px" }}>
+                      {slots.map(slot => {
+                        const slotStudents = students.filter(s => s.slotId === slot.id);
+                        const unassignedInSlot = slotStudents.filter(s => !s.teamName);
+                        const alreadyGrouped = unassignedInSlot.length === 0 && slotStudents.length > 0;
+                        return (
+                          <div key={slot.id} style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
+                            <div className="row-between">
+                              <span style={{ fontWeight: 600 }}>{slot.label}</span>
+                              {alreadyGrouped ? (
+                                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 12, background: "rgba(34,197,94,0.12)", color: "#16a34a", fontWeight: 600 }}>✓ Grouped</span>
+                              ) : (
+                                <button
+                                  className="btn btn-coral btn-sm"
+                                  style={{ padding: "3px 10px", fontSize: 12 }}
+                                  disabled={isProcessing || slotStudents.length === 0}
+                                  onClick={async () => {
+                                    if (unassignedInSlot.length === 0) { addToast("No unassigned students in this slot.", "error"); return; }
+                                    setIsProcessing(true);
+                                    try {
+                                      const shuffled = [...unassignedInSlot].sort(() => Math.random() - 0.5);
+                                      // Find existing groups and their sizes
+                                      const groupsMap: Record<string, string[]> = {};
+                                      slotStudents.forEach(s => {
+                                        if (s.teamName) {
+                                          if (!groupsMap[s.teamName]) groupsMap[s.teamName] = [];
+                                          groupsMap[s.teamName].push(s.id);
+                                        }
+                                      });
+
+                                      const allAssignments: Record<string, string> = {};
+                                      let remaining = [...shuffled];
+
+                                      // Step 1: Fill incomplete groups first
+                                      for (const [gName, memberIds] of Object.entries(groupsMap)) {
+                                        if (memberIds.length < 5 && remaining.length > 0) {
+                                          const spotsLeft = 5 - memberIds.length;
+                                          const toAdd = remaining.splice(0, spotsLeft);
+                                          for (const s of toAdd) {
+                                            allAssignments[s.id] = gName;
+                                          }
+                                        }
+                                      }
+
+                                      // Step 2: Create new groups of 5 from remaining (max 6 total)
+                                      const MAX_GROUPS = 6;
+                                      const existingGroupCount = Object.keys(groupsMap).length;
+                                      let newGroupIndex = 0;
+                                      const newGroups: { name: string; ids: string[] }[] = [];
+                                      for (let i = 0; i < remaining.length; i += 5) {
+                                        if (existingGroupCount + newGroupIndex >= MAX_GROUPS) break;
+                                        const chunk = remaining.slice(i, i + 5);
+                                        const gName = `Group ${existingGroupCount + newGroupIndex + 1}`;
+                                        newGroupIndex++;
+                                        newGroups.push({ name: gName, ids: chunk.map(s => s.id) });
+                                        chunk.forEach(s => (allAssignments[s.id] = gName));
+                                      }
+
+                                      // Check if any students couldn't be assigned
+                                      const assignedCount = Object.keys(allAssignments).length;
+                                      const leftover = unassignedInSlot.length - assignedCount;
+
+                                      // Save fill-ups (assign to existing group names)
+                                      const fillUpsByGroup: Record<string, string[]> = {};
+                                      for (const [sid, gName] of Object.entries(allAssignments)) {
+                                        if (!newGroups.find(g => g.name === gName)) {
+                                          if (!fillUpsByGroup[gName]) fillUpsByGroup[gName] = [];
+                                          fillUpsByGroup[gName].push(sid);
+                                        }
+                                      }
+                                      for (const [gName, sids] of Object.entries(fillUpsByGroup)) {
+                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: sids, teamName: gName }) });
+                                        const json = await res.json();
+                                        if (!json.success) throw new Error(json.error);
+                                      }
+                                      // Save new groups
+                                      for (const group of newGroups) {
+                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: group.ids, teamName: group.name }) });
+                                        const json = await res.json();
+                                        if (!json.success) throw new Error(json.error);
+                                      }
+
+                                      setStudents(prev => prev.map(s => allAssignments[s.id] ? { ...s, teamName: allAssignments[s.id] } : s));
+                                      const filledCount = Object.keys(fillUpsByGroup).length;
+                                      if (leftover > 0) {
+                                        addToast(`Slot is full! All 6 groups are complete. ${leftover} student(s) could not be assigned.`, "error");
+                                      } else {
+                                        const msg = filledCount > 0
+                                          ? `Filled ${filledCount} existing group(s) and created ${newGroups.length} new group(s)!`
+                                          : `${newGroups.length} groups created for ${slot.label}!`;
+                                        addToast(msg, "success");
+                                      }
+                                      // Send group notification emails
+                                      try {
+                                        await fetch("http://localhost:3001/api/groups/notify", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ slotId: slot.id }),
+                                        });
+                                        addToast("Group emails sent to all members!", "success");
+                                      } catch { /* email is non-critical */ }
+                                    } catch (err: any) { addToast("Auto-group failed: " + err.message, "error"); }
+                                    finally { setIsProcessing(false); }
+                                  }}
+                                >
+                                  Form Groups
+                                </button>
+                              )}
+                            </div>
+                            <div
+                              style={{ marginTop: 6, color: "var(--coral)", cursor: "pointer", fontWeight: 600, fontSize: 13, display: "inline-flex", alignItems: "center", gap: 4 }}
+                              onClick={() => setShowSlotModal(slot.id)}
+                            >
+                              {slotStudents.length} students →
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="row-between" style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
                         <span>Unassigned / Pending</span>
-                        <span>{students.filter(s => !s.slotId).length} students</span>
+                        <strong style={{ fontSize: 13, color: "var(--coral)", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={() => setShowUnassignedModal(true)}>
+                          {students.filter(s => !s.slotId).length} students <span>→</span>
+                        </strong>
                       </div>
                     </div>
                   </div>
@@ -754,6 +867,102 @@ export default function CollegeDashboardPage() {
                 });
               };
 
+              const handleAutoGroup = async () => {
+                if (unassigned.length === 0) {
+                  addToast("No unassigned students to group.", "error");
+                  return;
+                }
+                setIsProcessing(true);
+                try {
+                  const shuffled = [...unassigned].sort(() => Math.random() - 0.5);
+                  const GROUP_SIZE = 5;
+
+                  const allAssignments: Record<string, string> = {};
+                  let remaining = [...shuffled];
+
+                  // Step 1: Fill incomplete groups first
+                  for (const [gName, memberIds] of Object.entries(teamsMap)) {
+                    if (memberIds.length < GROUP_SIZE && remaining.length > 0) {
+                      const spotsLeft = GROUP_SIZE - memberIds.length;
+                      const toAdd = remaining.splice(0, spotsLeft);
+                      for (const s of toAdd) {
+                        allAssignments[s.id] = gName;
+                      }
+                    }
+                  }
+
+                  // Step 2: Create new groups from remaining (max 6 total)
+                  const MAX_GROUPS = 6;
+                  const existingGroupCount = Object.keys(teamsMap).length;
+                  let newGroupIndex = 0;
+                  const newGroups: { name: string; ids: string[] }[] = [];
+                  for (let i = 0; i < remaining.length; i += GROUP_SIZE) {
+                    if (existingGroupCount + newGroupIndex >= MAX_GROUPS) break;
+                    const chunk = remaining.slice(i, i + GROUP_SIZE);
+                    const gName = `Group ${existingGroupCount + newGroupIndex + 1}`;
+                    newGroupIndex++;
+                    newGroups.push({ name: gName, ids: chunk.map(s => s.id) });
+                    chunk.forEach(s => (allAssignments[s.id] = gName));
+                  }
+
+                  const assignedCount = Object.keys(allAssignments).length;
+                  const leftover = unassigned.length - assignedCount;
+
+                  // Save fill-ups
+                  const fillUpsByGroup: Record<string, string[]> = {};
+                  for (const [sid, gName] of Object.entries(allAssignments)) {
+                    if (!newGroups.find(g => g.name === gName)) {
+                      if (!fillUpsByGroup[gName]) fillUpsByGroup[gName] = [];
+                      fillUpsByGroup[gName].push(sid);
+                    }
+                  }
+                  for (const [gName, sids] of Object.entries(fillUpsByGroup)) {
+                    const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ studentIds: sids, teamName: gName }),
+                    });
+                    const json = await res.json();
+                    if (!json.success) throw new Error(json.error);
+                  }
+                  // Save new groups
+                  for (const group of newGroups) {
+                    const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ studentIds: group.ids, teamName: group.name }),
+                    });
+                    const json = await res.json();
+                    if (!json.success) throw new Error(json.error);
+                  }
+
+                  setStudents(prev => prev.map(s => allAssignments[s.id] ? { ...s, teamName: allAssignments[s.id] } : s));
+
+                  const filledCount = Object.keys(fillUpsByGroup).length;
+                  if (leftover > 0) {
+                    addToast(`Slot is full! All 6 groups are complete. ${leftover} student(s) could not be assigned.`, "error");
+                  } else {
+                    const msg = filledCount > 0
+                      ? `Filled ${filledCount} existing group(s) and created ${newGroups.length} new group(s)!`
+                      : `${newGroups.length} groups of ~5 created automatically!`;
+                    addToast(msg, "success");
+                  }
+                  // Send group notification emails
+                  try {
+                    await fetch("http://localhost:3001/api/groups/notify", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ slotId: teamFormationSlot }),
+                    });
+                    addToast("Group emails sent to all members!", "success");
+                  } catch { /* email is non-critical */ }
+                } catch (err: any) {
+                  addToast("Auto-group failed: " + err.message, "error");
+                } finally {
+                  setIsProcessing(false);
+                }
+              };
+
               return (
                 <>
                   <div style={{ marginBottom: 16 }}>
@@ -762,91 +971,52 @@ export default function CollegeDashboardPage() {
                     </button>
                   </div>
 
-                  <div className="grid grid-2">
-                    {/* Left: Create Team Form */}
-                    <div className="card card-pad">
-                      <div className="section-title">Create Team for Slot</div>
-                      <div className="section-desc">Select students in {slotLabel} to group them.</div>
-                      
-                      <div className="form-group" style={{ marginTop: 12 }}>
-                        <label>Team Name</label>
-                        <input 
-                          className="input" 
-                          placeholder="e.g. Team Alpha" 
-                          value={newTeamName} 
-                          onChange={(e) => setNewTeamName(e.target.value)}
-                        />
+                  <div className="card card-pad">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <div className="section-title">Teams — {slotLabel}</div>
+                        <div className="section-desc">{Object.keys(teamsMap).length} team(s) formed · {unassigned.length} students still unassigned</div>
                       </div>
-
-                      <div style={{ marginTop: 16 }}>
-                        <label style={{ fontSize: 12, fontWeight: "bold", color: "var(--slate-2)", display: "block", marginBottom: 8 }}>
-                          Select Students ({unassigned.length} available)
-                        </label>
-                        {unassigned.length === 0 ? (
-                          <div style={{ fontSize: 13, color: "var(--slate-2)", padding: "12px 0" }}>
-                            No unassigned students in this slot.
-                          </div>
-                        ) : (
-                          <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 8 }}>
-                            {unassigned.map(s => (
-                              <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", cursor: "pointer", fontSize: 13 }}>
-                                <input 
-                                  type="checkbox" 
-                                  checked={selectedTeamStudents.has(s.id)} 
-                                  onChange={() => toggleTeamStudent(s.id)}
-                                />
-                                <span>{s.name} <span style={{ color: "var(--slate-2)", fontSize: 11 }}>({s.email})</span></span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <button 
-                        className="btn btn-coral btn-block" 
-                        style={{ marginTop: 20 }} 
-                        disabled={isProcessing || unassigned.length === 0}
-                        onClick={handleCreateTeam}
-                      >
-                        {isProcessing ? "Processing..." : "Create Team"}
-                      </button>
+                      {unassigned.length > 0 && (
+                        <button
+                          className="btn btn-coral btn-sm"
+                          disabled={isProcessing}
+                          onClick={handleAutoGroup}
+                        >
+                          {isProcessing ? "Grouping..." : `⚡ Form ${Math.ceil(unassigned.length / 5)} More Group${Math.ceil(unassigned.length / 5) !== 1 ? "s" : ""}`}
+                        </button>
+                      )}
                     </div>
 
-                    {/* Right: Existing Teams */}
-                    <div className="card card-pad">
-                      <div className="section-title">Existing Teams</div>
-                      <div className="section-desc">Teams currently registered in {slotLabel}.</div>
-
-                      <div className="stack" style={{ marginTop: 16 }}>
-                        {Object.keys(teamsMap).length === 0 ? (
-                          <div style={{ padding: "30px 0", textAlign: "center", color: "var(--slate-2)", fontSize: 14 }}>
-                            No teams formed yet.
-                          </div>
-                        ) : (
-                          Object.entries(teamsMap).map(([tName, members]) => (
-                            <div key={tName} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14, background: "#fdfdfd" }}>
-                              <div className="row-between" style={{ marginBottom: 10 }}>
-                                <strong style={{ fontSize: 14, color: "var(--navy)" }}>{tName}</strong>
-                                <button 
-                                  className="btn btn-ghost btn-sm" 
-                                  style={{ color: "var(--coral)", padding: "2px 8px" }}
-                                  disabled={isProcessing}
-                                  onClick={() => handleDisbandTeam(tName, members.map(m => m.id))}
-                                >
-                                  Disband
-                                </button>
-                              </div>
-                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                {members.map(m => (
-                                  <span key={m.id} style={{ background: "#eee", fontSize: 11, padding: "4px 8px", borderRadius: 16 }}>
-                                    {m.name}
-                                  </span>
-                                ))}
-                              </div>
+                    <div className="stack">
+                      {Object.keys(teamsMap).length === 0 ? (
+                        <div style={{ padding: "40px 0", textAlign: "center", color: "var(--slate-2)", fontSize: 14 }}>
+                          No teams formed yet. Click "Form Groups" on the Overview to auto-create groups of 5.
+                        </div>
+                      ) : (
+                        Object.entries(teamsMap).map(([tName, members]) => (
+                          <div key={tName} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14, background: "#fdfdfd" }}>
+                            <div className="row-between" style={{ marginBottom: 10 }}>
+                              <strong style={{ fontSize: 14, color: "var(--navy)" }}>{tName}</strong>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--coral)", padding: "2px 8px" }}
+                                disabled={isProcessing}
+                                onClick={() => handleDisbandTeam(tName, members.map(m => m.id))}
+                              >
+                                Disband
+                              </button>
                             </div>
-                          ))
-                        )}
-                      </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {members.map(m => (
+                                <span key={m.id} style={{ background: "#eee", fontSize: 11, padding: "4px 8px", borderRadius: 16 }}>
+                                  {m.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </>
@@ -1057,6 +1227,121 @@ export default function CollegeDashboardPage() {
           </div>
         </div>
       )}
+
+      {showUnassignedModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowUnassignedModal(false)}>
+          <div className="card card-pad" style={{ background: 'var(--bg)', width: 600, maxWidth: '90%', maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>Unassigned / Pending Students</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowUnassignedModal(false)}>Close</button>
+            </div>
+            {students.filter(s => !s.slotId).length === 0 ? (
+              <p style={{ color: 'var(--slate-2)', fontSize: 14 }}>All students have been assigned slots.</p>
+            ) : (
+              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--line)', fontSize: 12, color: 'var(--slate-2)' }}>
+                    <th style={{ padding: '8px 4px' }}>Name</th>
+                    <th style={{ padding: '8px 4px' }}>Email</th>
+                    <th style={{ padding: '8px 4px' }}>Phone</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.filter(s => !s.slotId).map(s => (
+                    <tr key={s.id} style={{ borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+                      <td style={{ padding: '10px 4px', fontWeight: 500 }}>{s.name}</td>
+                      <td style={{ padding: '10px 4px', color: 'var(--slate-2)' }}>{s.email}</td>
+                      <td style={{ padding: '10px 4px', color: 'var(--slate-2)' }}>{s.phone}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showSlotModal && (() => {
+        const slot = slots.find(s => s.id === showSlotModal);
+        const slotStudents = students.filter(s => s.slotId === showSlotModal);
+        const ungrouped = slotStudents.filter(s => !s.teamName);
+        const groupsMap: Record<string, typeof slotStudents> = {};
+        slotStudents.forEach(s => {
+          if (s.teamName) {
+            if (!groupsMap[s.teamName]) groupsMap[s.teamName] = [];
+            groupsMap[s.teamName].push(s);
+          }
+        });
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowSlotModal(null)}>
+            <div className="card card-pad" style={{ background: 'var(--bg)', width: 700, maxWidth: '92%', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18 }}>{slot?.label}</h3>
+                  <div style={{ fontSize: 13, color: 'var(--slate-2)', marginTop: 4 }}>{slotStudents.length} students · {Object.keys(groupsMap).length} groups formed</div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowSlotModal(null)}>Close</button>
+              </div>
+
+              {Object.keys(groupsMap).length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  {Object.entries(groupsMap).map(([gName, members]) => (
+                    <div key={gName} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 14, background: '#fdfdfd', marginBottom: 10 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--navy)', marginBottom: 8 }}>{gName} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--slate-2)' }}>({members.length} members)</span></div>
+                      <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ fontSize: 11, color: 'var(--slate-2)' }}>
+                            <th style={{ padding: '4px 4px' }}>Name</th>
+                            <th style={{ padding: '4px 4px' }}>Email</th>
+                            <th style={{ padding: '4px 4px' }}>Phone</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map(s => (
+                            <tr key={s.id} style={{ fontSize: 13, borderTop: '1px solid var(--line)' }}>
+                              <td style={{ padding: '8px 4px', fontWeight: 500 }}>{s.name}</td>
+                              <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.email}</td>
+                              <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.phone}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {ungrouped.length > 0 && (
+                <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 14, background: '#fdfdfd' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--slate-2)', marginBottom: 8 }}>Ungrouped <span style={{ fontSize: 12, fontWeight: 400 }}>({ungrouped.length} students)</span></div>
+                  <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ fontSize: 11, color: 'var(--slate-2)' }}>
+                        <th style={{ padding: '4px 4px' }}>Name</th>
+                        <th style={{ padding: '4px 4px' }}>Email</th>
+                        <th style={{ padding: '4px 4px' }}>Phone</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ungrouped.map(s => (
+                        <tr key={s.id} style={{ fontSize: 13, borderTop: '1px solid var(--line)' }}>
+                          <td style={{ padding: '8px 4px', fontWeight: 500 }}>{s.name}</td>
+                          <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.email}</td>
+                          <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.phone}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {slotStudents.length === 0 && (
+                <p style={{ color: 'var(--slate-2)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>No students have selected this slot yet.</p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

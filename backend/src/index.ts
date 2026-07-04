@@ -679,6 +679,39 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
       return res.status(400).json({ success: false, error: data.error });
     }
 
+    // Auto-assign to incomplete group if groups already exist for this slot
+    try {
+      const { data: slotStudents } = await supabaseAdmin
+        .from('students')
+        .select('id, team_name')
+        .eq('slot_id', slotId)
+        .not('id', 'eq', id);
+
+      if (slotStudents && slotStudents.length > 0) {
+        // Check if any groups have been formed
+        const groupCounts: Record<string, number> = {};
+        slotStudents.forEach((s: any) => {
+          if (s.team_name) {
+            groupCounts[s.team_name] = (groupCounts[s.team_name] || 0) + 1;
+          }
+        });
+
+        // If groups exist, find one with < 5 members
+        if (Object.keys(groupCounts).length > 0) {
+          const incompleteGroup = Object.entries(groupCounts).find(([, count]) => count < 5);
+          if (incompleteGroup) {
+            await supabaseAdmin
+              .from('students')
+              .update({ team_name: incompleteGroup[0] })
+              .eq('id', id);
+          }
+          // If no incomplete group, student stays ungrouped (all 6 groups are full = slot is full)
+        }
+      }
+    } catch (autoGroupErr) {
+      console.error("Auto-group assignment failed (non-critical):", autoGroupErr);
+    }
+
     // Send confirmation email
     try {
       const mailOptions = {
@@ -974,6 +1007,130 @@ app.delete('/api/students/:id', async (req: Request, res: Response): Promise<any
     return res.json({ success: true });
   } catch (err: any) {
     console.error("Unexpected error in DELETE /api/students:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Send group notification emails to all members in a slot
+app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any> => {
+  const { slotId } = req.body;
+  if (!slotId) {
+    return res.status(400).json({ success: false, error: 'slotId is required' });
+  }
+
+  try {
+    // Get the slot label
+    const { data: slotData, error: slotError } = await supabaseAdmin
+      .from('slots')
+      .select('label')
+      .eq('id', slotId)
+      .single();
+
+    if (slotError || !slotData) {
+      return res.status(404).json({ success: false, error: 'Slot not found.' });
+    }
+
+    // Get all students in this slot
+    const { data: slotStudents, error: studentsError } = await supabaseAdmin
+      .from('students')
+      .select('id, name, email, phone, team_name')
+      .eq('slot_id', slotId);
+
+    if (studentsError) {
+      return res.status(500).json({ success: false, error: studentsError.message });
+    }
+
+    if (!slotStudents || slotStudents.length === 0) {
+      return res.status(400).json({ success: false, error: 'No students in this slot.' });
+    }
+
+    // Group students by team_name
+    const groups: Record<string, typeof slotStudents> = {};
+    slotStudents.forEach((s: any) => {
+      if (s.team_name) {
+        if (!groups[s.team_name]) groups[s.team_name] = [];
+        groups[s.team_name].push(s);
+      }
+    });
+
+    if (Object.keys(groups).length === 0) {
+      return res.status(400).json({ success: false, error: 'No groups formed yet in this slot.' });
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    // Send email to each member with ONLY their group's details
+    for (const [groupName, members] of Object.entries(groups)) {
+      const membersHtml = members.map((m: any) =>
+        `<tr>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px;">${m.name}</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.email}</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.phone}</td>
+        </tr>`
+      ).join('');
+
+      for (const member of members) {
+        try {
+          const mailOptions = {
+            from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+            to: (member as any).email,
+            subject: `MarkUp – You're in ${groupName}!`,
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #ddd; max-width: 600px; border-radius: 10px; background: #fff;">
+                <h2 style="color: #FF5A5F; margin-bottom: 6px;">Your Group is Ready! 🎉</h2>
+                <p style="color: #333; font-size: 15px; margin-bottom: 20px;">
+                  Hello <strong>${(member as any).name}</strong>, you have been assigned to a group for the MarkUp competition.
+                </p>
+
+                <div style="background: #f8f8f8; border: 1px solid #eee; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
+                  <div style="display: flex; justify-content: space-between;">
+                    <div>
+                      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 700;">Your Group</div>
+                      <div style="font-size: 22px; font-weight: bold; color: #1a1a2e; margin-top: 4px;">${groupName}</div>
+                    </div>
+                    <div style="text-align: right;">
+                      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 700;">Slot</div>
+                      <div style="font-size: 16px; font-weight: 600; color: #333; margin-top: 4px;">${slotData.label}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <h3 style="color: #1a1a2e; font-size: 15px; margin-bottom: 10px;">Your Team Members (${members.length})</h3>
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #eee; border-radius: 8px; overflow: hidden;">
+                  <thead>
+                    <tr style="background: #f4f4f4;">
+                      <th style="padding: 8px 12px; text-align: left; font-size: 12px; color: #666; font-weight: 600;">Name</th>
+                      <th style="padding: 8px 12px; text-align: left; font-size: 12px; color: #666; font-weight: 600;">Email</th>
+                      <th style="padding: 8px 12px; text-align: left; font-size: 12px; color: #666; font-weight: 600;">Phone</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${membersHtml}
+                  </tbody>
+                </table>
+
+                <p style="font-size: 13px; color: #888; margin-top: 24px;">
+                  Coordinate with your team members and be prepared for the competition. Good luck! 🚀
+                </p>
+                <p style="font-size: 11px; color: #aaa; margin-top: 16px;">
+                  If you have any questions, contact your College Admin.
+                </p>
+              </div>
+            `
+          };
+          await transporter.sendMail(mailOptions);
+          sent++;
+        } catch (mailErr) {
+          console.error(`Failed to send group email to ${(member as any).email}:`, mailErr);
+          failed++;
+        }
+      }
+    }
+
+    return res.json({ success: true, sent, failed, totalGroups: Object.keys(groups).length });
+  } catch (err: any) {
+    console.error("POST /api/groups/notify error:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
