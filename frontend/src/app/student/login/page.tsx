@@ -7,64 +7,74 @@ import { useStateContext } from "@/context/StateContext";
 
 export default function StudentLoginPage() {
   const router = useRouter();
-  const { groups, setCurrentStudent, addToast } = useStateContext();
+  const { students, setCurrentStudent, addToast } = useStateContext();
   
-  const [loginStudentVal, setLoginStudentVal] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginStudentId, setLoginStudentId] = useState("");
   const [otpStep, setOtpStep] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
   const [otpInputs, setOtpInputs] = useState(["", "", "", ""]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Sync first student phone select
-  useEffect(() => {
-    if (groups.length > 0 && groups[0].members.length > 0 && !loginStudentVal) {
-      setLoginStudentVal(`${groups[0].id}|0|${groups[0].members[0].phone}`);
+  const handleStudentSendOtp = async () => {
+    if (!loginEmail.trim()) {
+      addToast("Please enter your email.", "error", "Missing info — ");
+      return;
     }
-  }, [groups, loginStudentVal]);
-
-  const getStudentPhoneList = () => {
-    const list: { val: string; label: string }[] = [];
-    groups.forEach(g => {
-      g.members.forEach((m, idx) => {
-        list.push({
-          val: `${g.id}|${idx}|${m.phone}`,
-          label: `${m.phone} — ${m.name} (${g.name})`,
-        });
+    
+    setIsProcessing(true);
+    try {
+      const res = await fetch("http://localhost:3001/api/student/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim() })
       });
-    });
-    return list;
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+      setOtpStep(true);
+      setOtpInputs(["", "", "", ""]);
+      addToast("OTP sent to your email successfully.", "success");
+    } catch (err: any) {
+      addToast(err.message || "Failed to send OTP", "error", "Error — ");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleStudentSendOtp = () => {
-    const [gid, idx, phone] = loginStudentVal.split("|");
-    const code = String(Math.floor(1000 + Math.random() * 9000));
-    setOtpCode(code);
-    setOtpStep(true);
-    setOtpInputs([code[0], code[1], code[2], code[3]]); // auto fill for demo
-    addToast("OTP sent to " + phone + ".", "success");
-  };
-
-  const handleStudentVerifyOtp = () => {
+  const handleStudentVerifyOtp = async () => {
     const entered = otpInputs.join("");
     if (entered.length < 4) {
       addToast("Enter the full 4-digit OTP.", "error", "Incomplete — ");
       return;
     }
-    if (entered !== otpCode) {
-      addToast("That OTP doesn't match. Try again.", "error", "Invalid OTP — ");
-      return;
+    
+    setIsProcessing(true);
+    try {
+      const res = await fetch("http://localhost:3001/api/student/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim(), code: entered })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+
+      const dbStudent = data.student;
+      setCurrentStudent({
+        studentId: dbStudent.id,
+        phone: dbStudent.phone,
+        name: dbStudent.name,
+      });
+
+      addToast("Welcome, " + dbStudent.name.split(" ")[0] + "!", "success");
+      router.push("/student/dashboard");
+    } catch (err: any) {
+      addToast(err.message || "Verification failed", "error", "Invalid OTP — ");
+    } finally {
+      setIsProcessing(false);
     }
-    const [gid, idx] = loginStudentVal.split("|");
-    const g = groups.find(x => x.id === gid);
-    if (!g) return;
-    const member = g.members[parseInt(idx)];
-    setCurrentStudent({
-      groupId: g.id,
-      memberIdx: parseInt(idx),
-      phone: member.phone,
-      name: member.name,
-    });
-    addToast("Welcome, " + member.name.split(" ")[0] + "!", "success");
-    router.push("/student/dashboard");
   };
 
   return (
@@ -79,7 +89,7 @@ export default function StudentLoginPage() {
             </div>
           </div>
           <h2>Concept to campaign starts here.</h2>
-          <p>Your college has already added your group. Verify with the OTP sent to your registered number to see your slot and get started.</p>
+          <p>Your college has already added you. Verify with the OTP sent to your registered email to see your slot and get started.</p>
           <div className="pill-row">
             <span className="pill">OTP secured</span>
             <span className="pill">Slot-based testing</span>
@@ -95,22 +105,26 @@ export default function StudentLoginPage() {
             {!otpStep ? (
               <div id="student-step-phone">
                 <h3 style={{ fontSize: 22, marginBottom: 6 }}>Student sign in</h3>
-                <p style={{ color: "var(--slate-2)", fontSize: 13, marginBottom: 22 }}>Use the mobile number your college registered with your group.</p>
+                <p style={{ color: "var(--slate-2)", fontSize: 13, marginBottom: 22 }}>Use the email address your college registered for you.</p>
                 <div className="form-group">
-                  <label>Registered mobile number</label>
-                  <select className="input" value={loginStudentVal} onChange={(e) => setLoginStudentVal(e.target.value)}>
-                    {getStudentPhoneList().map(s => (
-                      <option key={s.val} value={s.val}>{s.label}</option>
-                    ))}
-                  </select>
-                  <p className="hint">Only numbers uploaded by your College Admin can sign in.</p>
+                  <label>Registered email address</label>
+                  <input 
+                    className="input" 
+                    placeholder="student@example.com"
+                    value={loginEmail} 
+                    onChange={(e) => setLoginEmail(e.target.value)} 
+                    disabled={isProcessing}
+                  />
+                  <p className="hint">Only emails uploaded by your College Admin can sign in.</p>
                 </div>
-                <button className="btn btn-coral btn-block" onClick={handleStudentSendOtp}>Send OTP</button>
+                <button className="btn btn-coral btn-block" onClick={handleStudentSendOtp} disabled={isProcessing}>
+                  {isProcessing ? "Sending..." : "Send OTP"}
+                </button>
               </div>
             ) : (
               <div id="student-step-otp">
                 <h3 style={{ fontSize: 22, marginBottom: 6 }}>Enter the OTP</h3>
-                <p style={{ color: "var(--slate-2)", fontSize: 13, marginBottom: 18 }}>Sent to <b>{loginStudentVal.split("|")[2]}</b></p>
+                <p style={{ color: "var(--slate-2)", fontSize: 13, marginBottom: 18 }}>Sent to <b>{loginEmail.trim()}</b></p>
                 <div className="otp-box">
                   {otpInputs.map((val, idx) => (
                     <input
@@ -123,12 +137,16 @@ export default function StudentLoginPage() {
                         newInputs[idx] = e.target.value;
                         setOtpInputs(newInputs);
                       }}
+                      disabled={isProcessing}
                     />
                   ))}
                 </div>
-                <div className="demo-banner">🔐 Demo mode: your OTP is <b>{otpCode}</b> — auto-filled for you.</div>
-                <button className="btn btn-primary btn-block" onClick={handleStudentVerifyOtp} style={{ marginTop: 16 }}>Verify & continue</button>
-                <button className="btn btn-ghost btn-block" onClick={handleStudentSendOtp} style={{ marginTop: 8 }}>Resend OTP</button>
+                <button className="btn btn-primary btn-block" onClick={handleStudentVerifyOtp} style={{ marginTop: 16 }} disabled={isProcessing}>
+                  {isProcessing ? "Verifying..." : "Verify & continue"}
+                </button>
+                <button className="btn btn-ghost btn-block" onClick={handleStudentSendOtp} style={{ marginTop: 8 }} disabled={isProcessing}>
+                  Resend OTP
+                </button>
               </div>
             )}
           </div>

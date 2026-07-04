@@ -6,7 +6,7 @@ import { useStateContext, StatusBadge, initials, QUIZ } from "@/context/StateCon
 
 export default function StudentDashboardPage() {
   const router = useRouter();
-  const { groups, setGroups, currentStudent, setCurrentStudent, rounds, addToast, slotInfo } = useStateContext();
+  const { students, setStudents, currentStudent, setCurrentStudent, rounds, addToast, slotInfo } = useStateContext();
   
   const [studentTab, setStudentTab] = useState("home");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -25,10 +25,9 @@ export default function StudentDashboardPage() {
 
   if (!currentStudent) return null;
 
-  const activeGroup = groups.find(g => g.id === currentStudent.groupId);
-  const activeMember = activeGroup ? activeGroup.members[currentStudent.memberIdx] : null;
+  const activeStudent = students.find(s => s.id === currentStudent.studentId);
 
-  if (!activeGroup || !activeMember) return null;
+  if (!activeStudent) return null;
 
   const handleStartTest = () => {
     setQuizStarted(true);
@@ -50,20 +49,15 @@ export default function StudentDashboardPage() {
       if (quizAnswers[i] === q.correct) score++;
     });
 
-    setGroups(groups.map(g => {
-      if (g.id === currentStudent.groupId) {
-        const updatedMembers = [...g.members];
-        updatedMembers[currentStudent.memberIdx] = {
-          ...updatedMembers[currentStudent.memberIdx],
-          r1Score: score,
-        };
+    setStudents(students.map(s => {
+      if (s.id === currentStudent.studentId) {
         return {
-          ...g,
-          members: updatedMembers,
+          ...s,
+          r1Score: score,
           round1Status: "submitted",
         };
       }
-      return g;
+      return s;
     }));
 
     setQuizStarted(false);
@@ -80,17 +74,17 @@ export default function StudentDashboardPage() {
       return;
     }
 
-    setGroups(groups.map(g => {
-      if (g.id === currentStudent.groupId) {
+    setStudents(students.map(s => {
+      if (s.id === currentStudent.studentId) {
         return {
-          ...g,
+          ...s,
           [roundKey]: { status: "pending", link, note, juryScore: null },
         };
       }
-      return g;
+      return s;
     }));
 
-    addToast(activeGroup.name + "'s submission sent for jury review.", "success", "Submitted — ");
+    addToast("Submission sent for jury review.", "success", "Submitted — ");
     setStudentTab(roundKey);
   };
 
@@ -137,10 +131,10 @@ export default function StudentDashboardPage() {
           </div>
           <div className="side-foot">
             <div className="side-user">
-              <div className="avatar">{initials(activeMember.name)}</div>
+              <div className="avatar">{initials(activeStudent.name)}</div>
               <div>
-                <div className="u-name">{activeMember.name}</div>
-                <div className="u-role">{activeGroup.name}</div>
+                <div className="u-name">{activeStudent.name}</div>
+                <div className="u-role">{activeStudent.college}</div>
               </div>
             </div>
             <div className="side-link" onClick={handleLogout} style={{ marginTop: 6, cursor: "pointer" }}>
@@ -173,42 +167,45 @@ export default function StudentDashboardPage() {
             {studentTab === "home" && (
               <div className="grid grid-2">
                 <div className="card card-pad">
-                  <div className="section-title">Welcome, {activeMember.name.split(" ")[0]}</div>
-                  <div className="section-desc">{activeGroup.name} · {activeGroup.college}</div>
+                  <div className="section-title">Welcome, {activeStudent.name.split(" ")[0]}</div>
+                  <div className="section-desc">{activeStudent.college}</div>
                   <div style={{ padding: 16, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA", marginTop: 6 }}>
                     <div style={{ fontSize: 11.5, color: "var(--slate-2)", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Your assigned slot</div>
-                    <div style={{ fontSize: 18, fontFamily: "Cambria, serif", marginTop: 6 }}>{slotInfo(activeGroup.slotId).slot?.label}</div>
+                    <div style={{ fontSize: 18, fontFamily: "Cambria, serif", marginTop: 6 }}>{slotInfo(activeStudent.slotId).slot?.label}</div>
                     <div style={{ fontSize: 12.5, color: "var(--slate-2)", marginTop: 4 }}>Up to 40 students test together in this slot</div>
                   </div>
                   <div className="stack" style={{ marginTop: 16 }}>
                     <div className="row-between" style={{ padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 10 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>Round 1 · Individual Test</span>
-                      <StatusBadge status={rounds.round1 === "not-started" ? "not-started" : activeMember.r1Score !== null ? "submitted" : "in-progress"} />
+                      <StatusBadge status={rounds.round1 === "not-started" ? "not-started" : activeStudent.r1Score !== null ? "submitted" : "in-progress"} />
                     </div>
                     <div className="row-between" style={{ padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 10 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>Round 2 · Reel Upload</span>
-                      <StatusBadge status={activeGroup.round2.status} />
+                      <StatusBadge status={activeStudent.round2.status} />
                     </div>
                     <div className="row-between" style={{ padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 10 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>Round 3 · Demo Day Film</span>
-                      <StatusBadge status={activeGroup.round3.status} />
+                      <StatusBadge status={activeStudent.round3.status} />
                     </div>
                   </div>
                 </div>
 
                 <div className="card card-pad">
-                  <div className="section-title">Your group — {activeGroup.name}</div>
-                  <div className="section-desc">All 5 members must complete Round 1 individually.</div>
+                  <div className="section-title">Your Profile Details</div>
+                  <div className="section-desc">Your registered contact information.</div>
                   <div className="stack">
-                    {activeGroup.members.map((mm, i) => (
-                      <div key={i} className="row-between" style={{ padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 9 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                          <div className="avatar" style={{ width: 28, height: 28, fontSize: 11, background: i === currentStudent.memberIdx ? "var(--coral)" : "var(--navy-2)" }}>{initials(mm.name)}</div>
-                          <span style={{ fontSize: 13 }}>{mm.name}{i === currentStudent.memberIdx ? " (you)" : ""}</span>
-                        </div>
-                        <span style={{ fontSize: 12, color: "var(--slate-2)" }}>{mm.r1Score !== null ? mm.r1Score + "/5" : "Not tested"}</span>
-                      </div>
-                    ))}
+                    <div className="row-between" style={{ padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 9 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Email</span>
+                      <span style={{ fontSize: 13 }}>{activeStudent.email}</span>
+                    </div>
+                    <div className="row-between" style={{ padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 9 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Phone</span>
+                      <span style={{ fontSize: 13 }}>{activeStudent.phone}</span>
+                    </div>
+                    <div className="row-between" style={{ padding: "10px 12px", border: "1px solid var(--line)", borderRadius: 9 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>College</span>
+                      <span style={{ fontSize: 13 }}>{activeStudent.college}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -225,20 +222,20 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeMember.r1Score !== null && (
+                {rounds.round1 !== "not-started" && activeStudent.r1Score !== null && (
                   <div className="empty">
                     <div className="ico">✅</div>
                     <div className="t">You've completed the Round 1 test</div>
-                    <p style={{ fontSize: 12.5 }}>Your score: <b>{activeMember.r1Score} / 5</b>. Your group's average will be calculated once all 5 members finish.</p>
+                    <p style={{ fontSize: 12.5 }}>Your score: <b>{activeStudent.r1Score} / 5</b>.</p>
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeMember.r1Score === null && !quizStarted && (
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && (
                   <div className="card card-pad">
                     <div className="section-title">Ready to begin?</div>
                     <div className="section-desc">This is a timed, individual test. You can only attempt it once, within your assigned slot.</div>
                     <div style={{ padding: 14, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA", marginBottom: 18 }}>
-                      <div style={{ fontSize: 13 }}>🕒 Your slot: <b>{slotInfo(activeGroup.slotId).slot?.label}</b></div>
+                      <div style={{ fontSize: 13 }}>🕒 Your slot: <b>{slotInfo(activeStudent.slotId).slot?.label}</b></div>
                       <div style={{ fontSize: 13, marginTop: 6 }}>📝 5 multiple-choice questions · 1 mark each</div>
                       <div style={{ fontSize: 13, marginTop: 6 }}>⏱ Suggested time: 8 minutes</div>
                     </div>
@@ -246,7 +243,7 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeMember.r1Score === null && quizStarted && (
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && (
                   <div className="card card-pad">
                     <div className="row-between" style={{ marginBottom: 14 }}>
                       <div className="section-title" style={{ marginBottom: 0 }}>Round 1 Test</div>
@@ -274,7 +271,7 @@ export default function StudentDashboardPage() {
               <div className="card card-pad">
                 {(() => {
                   const roundKey = studentTab as "round2" | "round3";
-                  const r = activeGroup[roundKey];
+                  const r = activeStudent[roundKey];
                   const formatLabel = roundKey === "round2" ? "90-second Reel / Short" : "60-second Demo Day film";
                   const roundLabel = roundKey === "round2" ? "Round 2" : "Round 3";
                   const otherRoundLive = rounds[roundKey] !== "live";
@@ -302,7 +299,7 @@ export default function StudentDashboardPage() {
                   return (
                     <>
                       <div className="section-title">Upload your {formatLabel}</div>
-                      <div className="section-desc">One submission per group for {roundLabel}. {activeGroup.name} — make sure all 5 members are credited.</div>
+                      <div className="section-desc">Upload your individual {formatLabel} for {roundLabel}. Make sure all requirements are met.</div>
                       {r.status === "pending" && (
                         <div style={{ marginBottom: 16 }}>
                           <StatusBadge status="pending" />

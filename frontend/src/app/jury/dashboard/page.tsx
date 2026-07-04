@@ -6,7 +6,7 @@ import { useStateContext, StatusBadge, initials } from "@/context/StateContext";
 
 export default function JuryDashboardPage() {
   const router = useRouter();
-  const { groups, setGroups, currentJury, setCurrentJury, addToast, groupRound1Avg } = useStateContext();
+  const { students, setStudents, currentJury, setCurrentJury, addToast } = useStateContext();
   
   const [juryTab, setJuryTab] = useState("overview");
   const [juryScores, setJuryScores] = useState<Record<string, number>>({});
@@ -20,37 +20,37 @@ export default function JuryDashboardPage() {
 
   if (!currentJury) return null;
 
-  const handleJurySubmissionAction = (gid: string, roundKey: "round2" | "round3", status: "approved" | "rejected") => {
-    setGroups(groups.map(g => {
-      if (g.id === gid) {
+  const handleJurySubmissionAction = (sid: string, roundKey: "round2" | "round3", status: "approved" | "rejected") => {
+    setStudents(students.map(s => {
+      if (s.id === sid) {
         return {
-          ...g,
-          [roundKey]: { ...g[roundKey], status },
+          ...s,
+          [roundKey]: { ...s[roundKey], status },
         };
       }
-      return g;
+      return s;
     }));
-    const targetGroup = groups.find(g => g.id === gid);
-    addToast((targetGroup?.name || "Group") + "'s submission marked " + (status === "approved" ? "approved" : "needs changes") + ".", status === "approved" ? "success" : "error");
+    const targetStudent = students.find(s => s.id === sid);
+    addToast((targetStudent?.name || "Student") + "'s submission marked " + (status === "approved" ? "approved" : "needs changes") + ".", status === "approved" ? "success" : "error");
   };
 
-  const handleJuryScoreSave = (gid: string, roundKey: "round2" | "round3") => {
-    const val = juryScores[`${gid}-${roundKey}`];
+  const handleJuryScoreSave = (sid: string, roundKey: "round2" | "round3") => {
+    const val = juryScores[`${sid}-${roundKey}`];
     if (val === undefined || isNaN(val) || val < 0 || val > 10) {
       addToast("Enter a score between 0 and 10.", "error", "Invalid score — ");
       return;
     }
-    setGroups(groups.map(g => {
-      if (g.id === gid) {
+    setStudents(students.map(s => {
+      if (s.id === sid) {
         return {
-          ...g,
-          [roundKey]: { ...g[roundKey], juryScore: val },
+          ...s,
+          [roundKey]: { ...s[roundKey], juryScore: val },
         };
       }
-      return g;
+      return s;
     }));
-    const targetGroup = groups.find(g => g.id === gid);
-    addToast("Score saved for " + (targetGroup?.name || "group") + ".", "success");
+    const targetStudent = students.find(s => s.id === sid);
+    addToast("Score saved for " + (targetStudent?.name || "student") + ".", "success");
   };
 
   const handleLogout = () => {
@@ -119,10 +119,10 @@ export default function JuryDashboardPage() {
                 {juryTab === "round3" && "Round 3 Demo Day"}
               </h2>
                 <div className="sub">
-                  {juryTab === "overview" && "Your assigned groups and pending reviews"}
+                  {juryTab === "overview" && "Your assigned students and pending reviews"}
                   {juryTab === "round1" && "Auto-scored from the individual test — view only"}
-                  {juryTab === "round2" && "Review and approve each group's 90-second Reel"}
-                  {juryTab === "round3" && "Review and score each group's live campaign film"}
+                  {juryTab === "round2" && "Review and approve each student's 90-second Reel"}
+                  {juryTab === "round3" && "Review and score each student's live campaign film"}
                 </div>
               </div>
           </div>
@@ -133,18 +133,18 @@ export default function JuryDashboardPage() {
               <>
                 <div className="grid grid-3" style={{ marginBottom: 20 }}>
                   <div className="card stat-card">
-                    <div className="label">Groups assigned</div>
-                    <div className="value">{groups.length}</div>
+                    <div className="label">Students assigned</div>
+                    <div className="value">{students.length}</div>
                     <div className="delta">across all rounds</div>
                   </div>
                   <div className="card stat-card">
                     <div className="label">Round 2 awaiting review</div>
-                    <div className="value">{groups.filter(g => g.round2.status === "pending").length}</div>
+                    <div className="value">{students.filter(s => s.round2.status === "pending").length}</div>
                     <div className="delta">reels pending</div>
                   </div>
                   <div className="card stat-card">
                     <div className="label">Round 3 awaiting review</div>
-                    <div className="value">{groups.filter(g => g.round3.status === "pending").length}</div>
+                    <div className="value">{students.filter(s => s.round3.status === "pending").length}</div>
                     <div className="delta">films pending</div>
                   </div>
                 </div>
@@ -164,25 +164,25 @@ export default function JuryDashboardPage() {
             {juryTab === "round1" && (
               <div className="card card-pad">
                 <div className="section-title">Round 1 — Individual test scores</div>
-                <div className="section-desc">Scored automatically by the platform. Group score is the average of its 5 members.</div>
+                <div className="section-desc">Scored automatically by the platform. View only.</div>
                 <div className="scrollx">
                   <table>
                     <thead>
                       <tr>
-                        <th>Group</th>
-                        <th>Members tested</th>
-                        <th>Average score</th>
+                        <th>Student</th>
+                        <th>College</th>
+                        <th>Test Status</th>
+                        <th>Score</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {groups.map(g => {
-                        const avg = groupRound1Avg(g);
-                        const done = g.members.filter(m => m.r1Score !== null).length;
+                      {students.map(s => {
                         return (
-                          <tr key={g.id}>
-                            <td><b>{g.name}</b></td>
-                            <td>{done}/5</td>
-                            <td>{avg !== null ? avg.toFixed(1) + " / 5.0" : "—"}</td>
+                          <tr key={s.id}>
+                            <td><b>{s.name}</b></td>
+                            <td>{s.college}</td>
+                            <td>{s.r1Score !== null ? "Tested" : "Pending"}</td>
+                            <td>{s.r1Score !== null ? s.r1Score.toFixed(1) + " / 10.0" : "—"}</td>
                           </tr>
                         );
                       })}
@@ -195,22 +195,22 @@ export default function JuryDashboardPage() {
             {/* --- ROUND 2 / 3 --- */}
             {(juryTab === "round2" || juryTab === "round3") && (
               <div className="grid" style={{ gap: 14 }}>
-                {groups.map(g => {
+                {students.map(s => {
                   const roundKey = juryTab as "round2" | "round3";
-                  const r = g[roundKey];
+                  const r = s[roundKey];
                   const label = roundKey === "round2" ? "90-Sec Reel" : "60-Sec Demo Day Film";
                   return (
-                    <div key={g.id} className="card card-pad">
+                    <div key={s.id} className="card card-pad">
                       <div className="row-between">
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 14.5 }}>{g.name}</div>
-                          <div style={{ fontSize: 12, color: "var(--slate-2)", marginTop: 2 }}>{label} · {g.members.length} members</div>
+                          <div style={{ fontWeight: 700, fontSize: 14.5 }}>{s.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--slate-2)", marginTop: 2 }}>{label} · {s.college}</div>
                         </div>
                         <StatusBadge status={r.status} />
                       </div>
 
                       {r.status === "not-submitted" ? (
-                        <p style={{ fontSize: 12.5, color: "var(--slate-2)", marginTop: 14 }}>Waiting for this group to submit.</p>
+                        <p style={{ fontSize: 12.5, color: "var(--slate-2)", marginTop: 14 }}>Waiting for this student to submit.</p>
                       ) : (
                         <>
                           <div style={{ marginTop: 14, padding: 12, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA" }}>
@@ -229,18 +229,18 @@ export default function JuryDashboardPage() {
                                 type="number"
                                 min="0"
                                 max="10"
-                                value={juryScores[`${g.id}-${roundKey}`] ?? r.juryScore ?? ""}
-                                onChange={(e) => setJuryScores({ ...juryScores, [`${g.id}-${roundKey}`]: parseFloat(e.target.value) })}
+                                value={juryScores[`${s.id}-${roundKey}`] ?? r.juryScore ?? ""}
+                                onChange={(e) => setJuryScores({ ...juryScores, [`${s.id}-${roundKey}`]: parseFloat(e.target.value) })}
                                 placeholder="e.g. 8"
                               />
                             </div>
                             <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-                              <button className="btn btn-primary btn-sm" onClick={() => handleJuryScoreSave(g.id, roundKey)}>Save score</button>
+                              <button className="btn btn-primary btn-sm" onClick={() => handleJuryScoreSave(s.id, roundKey)}>Save score</button>
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                            <button className="btn btn-outline-coral btn-sm" onClick={() => handleJurySubmissionAction(g.id, roundKey, "approved")}>✓ Approve submission</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => handleJurySubmissionAction(g.id, roundKey, "rejected")}>Request changes</button>
+                            <button className="btn btn-outline-coral btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "approved")}>✓ Approve submission</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "rejected")}>Request changes</button>
                           </div>
                         </>
                       )}

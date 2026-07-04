@@ -2,6 +2,31 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
 import { supabaseAdmin } from './supabase';
+import fs from 'fs';
+import path from 'path';
+
+const TEAMS_FILE = path.join(__dirname, 'teams.json');
+
+function getTeamsData(): Record<string, string> {
+  try {
+    if (!fs.existsSync(TEAMS_FILE)) {
+      return {};
+    }
+    const content = fs.readFileSync(TEAMS_FILE, 'utf-8');
+    return JSON.parse(content || '{}');
+  } catch (err) {
+    console.error("Error reading teams.json:", err);
+    return {};
+  }
+}
+
+function saveTeamsData(data: Record<string, string>) {
+  try {
+    fs.writeFileSync(TEAMS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error("Error writing teams.json:", err);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -9,14 +34,14 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Nodemailer transport setup
+// Set up Nodemailer transporter using Hostinger SMTP
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.hostinger.com',
+  host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: false, // true for 465, false for other ports
   auth: {
-    user: process.env.SMTP_USER || 'info@gaplytiq.com',
-    pass: process.env.SMTP_PASS || 'Gaplytiq@2026',
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
 });
 
@@ -109,11 +134,15 @@ app.post('/api/colleges/validate', async (req: Request, res: Response): Promise<
       .from('colleges')
       .select('id, name, email')
       .eq('id', authData.user.id)
-      .single();
+      .maybeSingle();
 
     if (dbError) {
       console.error("DB fetch error during validate:", dbError);
       return res.status(500).json({ success: false, error: dbError.message });
+    }
+
+    if (!dbData) {
+      return res.status(403).json({ success: false, error: 'Access denied: This login portal is restricted to college administrators.' });
     }
 
     return res.json({ success: true, college: { id: dbData.id, name: dbData.name, email: dbData.email } });
@@ -153,6 +182,25 @@ app.get('/api/judges', async (req: Request, res: Response): Promise<any> => {
   }
 });
 
+// Delete a judge
+app.delete('/api/judges/:id', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  try {
+    // Delete the user from auth.users (this will cascade to the judges table due to foreign key)
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(id as string);
+
+    if (error) {
+      console.error("DELETE /api/judges/:id error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true, message: 'Judge removed successfully' });
+  } catch (err: any) {
+    console.error("Unexpected error in DELETE /api/judges/:id:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Create a judge & send invite email
 app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
   const { name, email, dept, college_id } = req.body;
@@ -161,7 +209,18 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
   }
 
   try {
-    // 0. Fetch the college name for the invitation email
+    // 0. Check if judge email already exists in the judges table
+    const { data: existingJudge } = await supabaseAdmin
+      .from('judges')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+      
+    if (existingJudge) {
+      return res.status(400).json({ success: false, error: 'A judge with this email already exists on the panel.' });
+    }
+
+    // 0.5 Fetch the college name for the invitation email
     const { data: collegeData, error: collegeError } = await supabaseAdmin
       .from('colleges')
       .select('name')
@@ -229,8 +288,9 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
     }
 
     // 3. Generate invite/recovery link
+    // We must use 'recovery' because 'invite' attempts to CREATE the user, but we already created them above!
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: isNewUser ? 'invite' : 'recovery',
+      type: 'recovery',
       email,
       options: {
         redirectTo: 'http://localhost:3000/jury/reset-password'
@@ -242,7 +302,22 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
       return res.status(500).json({ success: false, error: 'User created but invite link generation failed: ' + linkError.message });
     }
 
-    const actionLink = linkData.properties.action_link;
+    let actionLink = linkData.properties.action_link;
+
+    // Fix: Supabase sometimes generates links with 'localhost' if its internal SITE_URL is misconfigured.
+    // We rewrite the link to use our configured SUPABASE_URL from the .env file.
+    const supabaseUrl = process.env.SUPABASE_URL;
+    if (supabaseUrl && actionLink.includes('localhost')) {
+      try {
+        const parsedLink = new URL(actionLink);
+        const parsedSupabase = new URL(supabaseUrl);
+        parsedLink.protocol = parsedSupabase.protocol;
+        parsedLink.host = parsedSupabase.host;
+        actionLink = parsedLink.toString();
+      } catch (e) {
+        console.error("Could not parse actionLink for rewriting:", e);
+      }
+    }
 
     // 4. Send email invitation via Hostinger SMTP
     const mailOptions = {
@@ -277,6 +352,533 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
     return res.json({ success: true, message: 'Judge appointed and invitation email sent' });
   } catch (err: any) {
     console.error("Unexpected error in POST /api/judges:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =====================================
+app.post('/api/jury/login', async (req: Request, res: Response): Promise<any> => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password required' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      return res.status(401).json({ success: false, error: 'Invalid email or password' });
+    }
+
+    const { data: judgeData, error: dbError } = await supabaseAdmin
+      .from('judges')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    if (dbError || !judgeData) {
+      return res.status(401).json({ success: false, error: 'Access denied: User is not recognized as a judge.' });
+    }
+
+    return res.json({ success: true, judge: judgeData });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/jury/login:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+const activeOtps = new Map<string, string>();
+
+// Send OTP to student email
+app.post('/api/student/send-otp', async (req: Request, res: Response): Promise<any> => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ success: false, error: 'Email is required' });
+  }
+
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Check if student exists in the database
+    const { data: student, error } = await supabaseAdmin
+      .from('students')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (error || !student) {
+      return res.status(400).json({ success: false, error: 'This email is not registered as a student. Contact your College Admin.' });
+    }
+
+    const otpCode = String(Math.floor(1000 + Math.random() * 9000));
+    activeOtps.set(normalizedEmail, otpCode);
+
+    // Send email via nodemailer
+    const mailOptions = {
+      from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+      to: normalizedEmail,
+      subject: 'Your MarkUp Student Verification OTP',
+      text: `Your OTP is ${otpCode}. It is valid for 10 minutes.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 500px; border-radius: 8px;">
+          <h2 style="color: #FF5A5F; margin-bottom: 20px;">MarkUp Verification</h2>
+          <p>Hello,</p>
+          <p>Your one-time verification code to sign in is:</p>
+          <div style="background: #f4f4f4; padding: 12px; font-size: 24px; font-weight: bold; letter-spacing: 4px; text-align: center; border-radius: 4px; margin: 20px 0; color: #333;">
+            ${otpCode}
+          </div>
+          <p>Please enter this code on the verification screen to proceed.</p>
+          <p style="font-size: 12px; color: #777; margin-top: 30px;">This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    return res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (err: any) {
+    console.error("Error in send-otp:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Verify OTP and return student profile
+app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise<any> => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ success: false, error: 'Email and OTP code are required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const storedOtp = activeOtps.get(normalizedEmail);
+
+  if (!storedOtp || storedOtp !== code.trim()) {
+    return res.status(400).json({ success: false, error: 'Invalid or expired OTP.' });
+  }
+
+  // Clear OTP on successful verification
+  activeOtps.delete(normalizedEmail);
+
+  try {
+    const { data: student, error } = await supabaseAdmin
+      .from('students')
+      .select('*')
+      .eq('email', normalizedEmail)
+      .single();
+
+    if (error || !student) {
+      return res.status(400).json({ success: false, error: 'Student profile not found.' });
+    }
+
+    // Resolve college name if possible
+    let collegeName = "Unknown College";
+    const { data: college } = await supabaseAdmin
+      .from('colleges')
+      .select('name')
+      .eq('id', student.college_id)
+      .maybeSingle();
+      
+    if (college) {
+      collegeName = college.name;
+    }
+
+    const teamsData = getTeamsData();
+    return res.json({
+      success: true,
+      student: {
+        id: student.id,
+        name: student.name,
+        email: student.email,
+        phone: student.phone,
+        collegeId: student.college_id,
+        college: collegeName,
+        slotId: student.slot_id,
+        teamName: teamsData[student.id] || null,
+        round1Status: student.round1_status || "not-started",
+        r1Score: student.r1_score,
+        round2: {
+          status: student.round2_status || "not-submitted",
+          link: student.r2_link || "",
+          note: student.r2_note || "",
+          juryScore: student.r2_score
+        },
+        round3: {
+          status: student.round3_status || "not-submitted",
+          link: student.r3_link || "",
+          note: student.r3_note || "",
+          juryScore: student.r3_score
+        }
+      }
+    });
+  } catch (err: any) {
+    console.error("Error in verify-otp:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// STUDENTS
+// =====================================
+
+async function sendSlotSelectionEmail(studentId: string, email: string, name: string) {
+  const selectUrl = `http://localhost:3000/student/select-slot?id=${studentId}`;
+  const mailOptions = {
+    from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+    to: email.trim().toLowerCase(),
+    subject: 'Select Your MarkUp Test Slot',
+    text: `Hello ${name},\n\nPlease select your test slot for MarkUp by visiting this link: ${selectUrl}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 500px; border-radius: 8px;">
+        <h2 style="color: #FF5A5F; margin-bottom: 20px;">Welcome to MarkUp!</h2>
+        <p>Hello <strong>${name}</strong>,</p>
+        <p>Your college admin has registered you for the MarkUp competition. To get started, please select your testing slot:</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${selectUrl}" style="background-color: #FF5A5F; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Select Testing Slot</a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; font-size: 13px; color: #555;"><a href="${selectUrl}">${selectUrl}</a></p>
+        <p style="font-size: 12px; color: #777; margin-top: 30px;">If you have any questions, please contact your College Admin.</p>
+      </div>
+    `
+  };
+  await transporter.sendMail(mailOptions);
+}
+
+// Get student details by ID
+app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  try {
+    const { data: student, error } = await supabaseAdmin
+      .from('students')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !student) {
+      return res.status(404).json({ success: false, error: 'Student not found' });
+    }
+
+    let collegeName = "Unknown College";
+    const { data: college } = await supabaseAdmin
+      .from('colleges')
+      .select('name')
+      .eq('id', student.college_id)
+      .maybeSingle();
+      
+    if (college) {
+      collegeName = college.name;
+    }
+
+    const teamsData = getTeamsData();
+    return res.json({
+      success: true,
+      student: {
+        id: student.id,
+        name: student.name,
+        email: student.email,
+        college: collegeName,
+        slotId: student.slot_id,
+        teamName: teamsData[student.id] || null
+      }
+    });
+  } catch (err: any) {
+    console.error("GET /api/students/:id error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update student slot selection
+app.post('/api/students/:id/select-slot', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { slotId } = req.body;
+
+  if (!slotId) {
+    return res.status(400).json({ success: false, error: 'slotId is required' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('students')
+      .update({ slot_id: slotId })
+      .eq('id', id)
+      .select();
+
+    if (error || !data || data.length === 0) {
+      console.error("Update slot error:", error);
+      return res.status(400).json({ success: false, error: 'Failed to update slot' });
+    }
+
+    return res.json({ success: true, student: data[0] });
+  } catch (err: any) {
+    console.error("POST /api/students/:id/select-slot error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get students by college id
+app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
+  const college_id = req.query.college_id as string;
+  if (!college_id) {
+    return res.status(400).json({ success: false, error: 'Missing college_id' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('students')
+      .select('*')
+      .eq('college_id', college_id)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error("GET /api/students error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+    const teamsData = getTeamsData();
+    const withTeams = (data || []).map((s: any) => ({
+      ...s,
+      team_name: teamsData[s.id] || null
+    }));
+    return res.json({ success: true, data: withTeams });
+  } catch (err: any) {
+    console.error("Unexpected error in GET /api/students:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Assign a list of students to a team name (or clear team assignment)
+app.post('/api/students/assign-team', (req: Request, res: Response): any => {
+  const { studentIds, teamName } = req.body;
+  if (!studentIds || !Array.isArray(studentIds)) {
+    return res.status(400).json({ success: false, error: 'studentIds array is required' });
+  }
+
+  try {
+    const teamsData = getTeamsData();
+    
+    // Assign teamName (if null/empty, it unassigns)
+    studentIds.forEach((id: string) => {
+      if (teamName) {
+        teamsData[id] = teamName.trim();
+      } else {
+        delete teamsData[id];
+      }
+    });
+
+    saveTeamsData(teamsData);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error in assign-team:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Add a single student
+app.post('/api/students', async (req: Request, res: Response): Promise<any> => {
+  const student = req.body;
+  if (!student.name || !student.phone || !student.collegeId || !student.email) {
+    return res.status(400).json({ success: false, error: 'Missing required fields' });
+  }
+
+  if (!student.email.includes('@')) {
+    return res.status(400).json({ success: false, error: 'Invalid email address' });
+  }
+
+  if (!/^\d{10}$/.test(student.phone)) {
+    return res.status(400).json({ success: false, error: 'Mobile number must be exactly 10 digits' });
+  }
+
+  try {
+    // 1. Create auth user
+    const tempPassword = Math.random().toString(36).substring(2, 10) + "Ab1!";
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: student.email,
+      password: tempPassword,
+      email_confirm: true,
+    });
+
+    if (authError) {
+      console.error("Auth creation error for student:", authError);
+      return res.status(500).json({ success: false, error: authError.message });
+    }
+
+    const userId = authData.user.id;
+
+    // 2. Insert into database
+    const { data, error: dbError } = await supabaseAdmin
+      .from('students')
+      .insert([{
+        id: userId,
+        name: student.name,
+        email: student.email,
+        phone: student.phone,
+        college_id: student.collegeId,
+        slot_id: student.slotId,
+        round1_status: student.round1Status,
+        r1_score: student.r1Score,
+      }])
+      .select();
+
+    if (dbError) {
+      console.error("POST /api/students DB error:", dbError);
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      return res.status(500).json({ success: false, error: dbError.message });
+    }
+
+    const dbStudent = data ? data[0] : null;
+    if (dbStudent) {
+      try {
+        await sendSlotSelectionEmail(dbStudent.id, dbStudent.email, dbStudent.name);
+      } catch (mailErr) {
+        console.error("Failed to send slot selection email:", mailErr);
+      }
+    }
+
+    return res.json({ success: true, data: dbStudent });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/students:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Add multiple students
+app.post('/api/students/bulk', async (req: Request, res: Response): Promise<any> => {
+  const { students } = req.body;
+  if (!students || !Array.isArray(students)) {
+    return res.status(400).json({ success: false, error: 'Invalid students array' });
+  }
+
+  try {
+    const createdStudents = [];
+    
+    for (const s of students) {
+      if (!s.email || !s.email.includes('@')) {
+        return res.status(400).json({ success: false, error: `Invalid email address for ${s.name || 'student'}` });
+      }
+      if (!/^\d{10}$/.test(s.phone)) {
+        return res.status(400).json({ success: false, error: `Mobile number must be exactly 10 digits for ${s.name || 'student'}` });
+      }
+
+      try {
+        const tempPassword = Math.random().toString(36).substring(2, 10) + "Ab1!";
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: s.email,
+          password: tempPassword,
+          email_confirm: true,
+        });
+
+        if (authError) {
+          throw new Error(`Auth error for ${s.email}: ${authError.message}`);
+        }
+
+        createdStudents.push({
+          id: authData.user.id,
+          name: s.name,
+          email: s.email,
+          phone: s.phone,
+          college_id: s.collegeId,
+          slot_id: s.slotId,
+          round1_status: s.round1Status,
+          r1_score: s.r1Score,
+        });
+      } catch (err: any) {
+        // Clean up previously created auth users in this batch
+        for (const created of createdStudents) {
+          await supabaseAdmin.auth.admin.deleteUser(created.id);
+        }
+        return res.status(500).json({ success: false, error: err.message });
+      }
+    }
+
+    const { data, error: dbError } = await supabaseAdmin
+      .from('students')
+      .insert(createdStudents)
+      .select();
+
+    if (dbError) {
+      console.error("POST /api/students/bulk DB error:", dbError);
+      for (const created of createdStudents) {
+        await supabaseAdmin.auth.admin.deleteUser(created.id);
+      }
+      return res.status(500).json({ success: false, error: dbError.message });
+    }
+
+    if (data && Array.isArray(data)) {
+      for (const dbStudent of data) {
+        try {
+          await sendSlotSelectionEmail(dbStudent.id, dbStudent.email, dbStudent.name);
+        } catch (mailErr) {
+          console.error(`Failed to send bulk slot email to ${dbStudent.email}:`, mailErr);
+        }
+      }
+    }
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/students/bulk:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/students/bulk-delete', async (req: Request, res: Response): Promise<any> => {
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, error: 'Missing or invalid student IDs array' });
+  }
+
+  try {
+    const { error: dbError } = await supabaseAdmin
+      .from('students')
+      .delete()
+      .in('id', ids);
+
+    if (dbError) {
+      console.error("POST /api/students/bulk-delete DB error:", dbError);
+      return res.status(500).json({ success: false, error: dbError.message });
+    }
+
+    // Delete from Supabase Auth sequentially
+    for (const id of ids) {
+      const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+      if (authError) {
+        console.error(`DELETE Auth error for ${id}:`, authError);
+      }
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/students/bulk-delete:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete a student
+app.delete('/api/students/:id', async (req: Request, res: Response): Promise<any> => {
+  const id = req.params.id as string;
+  if (!id) {
+    return res.status(400).json({ success: false, error: 'Missing student ID' });
+  }
+
+  try {
+    const { error: dbError } = await supabaseAdmin
+      .from('students')
+      .delete()
+      .eq('id', id);
+
+    if (dbError) {
+      console.error("DELETE /api/students DB error:", dbError);
+      return res.status(500).json({ success: false, error: dbError.message });
+    }
+
+    // Delete from Supabase Auth
+    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(id);
+    if (authError) {
+      console.error("DELETE /api/students Auth error:", authError);
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Unexpected error in DELETE /api/students:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

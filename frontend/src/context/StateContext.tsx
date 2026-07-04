@@ -5,12 +5,6 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 // =========================================================
 // TYPES & DATA STRUCTURES
 // =========================================================
-export interface Member {
-  name: string;
-  phone: string;
-  r1Score: number | null;
-}
-
 export interface RoundSubmission {
   status: "not-submitted" | "pending" | "approved" | "rejected";
   link: string;
@@ -18,13 +12,17 @@ export interface RoundSubmission {
   juryScore: number | null;
 }
 
-export interface Group {
+export interface Student {
   id: string;
   name: string;
+  email: string;
+  phone: string;
+  collegeId: string;
   college: string;
-  members: Member[];
   slotId: string | null;
+  teamName: string | null;
   round1Status: "not-started" | "in-progress" | "submitted";
+  r1Score: number | null;
   round2: RoundSubmission;
   round3: RoundSubmission;
 }
@@ -52,41 +50,7 @@ export interface Toast {
 // =========================================================
 // INITIAL MOCK DATA GENERATORS
 // =========================================================
-const FIRST = ["Aarav", "Diya", "Kabir", "Meera", "Rohan", "Ishita", "Vivaan", "Ananya", "Aditya", "Sara", "Arjun", "Tara", "Kunal", "Nisha", "Yash", "Priya", "Dev", "Riya", "Karan", "Simran"];
-const LAST = ["Sharma", "Mehta", "Kapoor", "Iyer", "Singh", "Nair", "Verma", "Das", "Reddy", "Joshi"];
-
-function rndName(seed: number) {
-  return FIRST[seed % FIRST.length] + " " + LAST[(seed * 3 + 1) % LAST.length];
-}
-
-function rndPhone(seed: number) {
-  return "98" + String(10000000 + seed * 137).slice(0, 8);
-}
-
-function buildSeedGroups(): Group[] {
-  const names = ["BrandStorm", "PixelPitch", "Funnel Five", "HypeHive", "MarketMavens", "ReelDeal", "CampaignX", "AdRenaline", "BuzzCraft", "ThePivot"];
-  const groups: Group[] = [];
-  const slotsList = ["S1", "S2", "S3"];
-
-  for (let i = 0; i < 10; i++) {
-    const members: Member[] = [];
-    for (let m = 0; m < 5; m++) {
-      const seed = i * 5 + m;
-      members.push({ name: rndName(seed), phone: rndPhone(seed), r1Score: null });
-    }
-    groups.push({
-      id: "G" + (i + 1),
-      name: names[i],
-      college: "Alliance University",
-      members,
-      slotId: slotsList[i % slotsList.length], // auto-assigned
-      round1Status: "not-started",
-      round2: { status: "not-submitted", link: "", note: "", juryScore: null },
-      round3: { status: "not-submitted", link: "", note: "", juryScore: null },
-    });
-  }
-  return groups;
-}
+// Mock data generator removed
 
 export const QUIZ = [
   { q: "What does “CTA” stand for in a marketing campaign?", opts: ["Call to Action", "Content Targeting Analysis", "Customer Trend Audit", "Click Through Average"], correct: 0 },
@@ -121,8 +85,8 @@ export function StatusBadge({ status }: { status: string }) {
 // =========================================================
 
 interface StateContextProps {
-  groups: Group[];
-  setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
+  students: Student[];
+  setStudents: React.Dispatch<React.SetStateAction<Student[]>>;
   judges: Judge[];
   setJudges: React.Dispatch<React.SetStateAction<Judge[]>>;
   slots: Slot[];
@@ -138,26 +102,25 @@ interface StateContextProps {
   setCollegeAdminId: React.Dispatch<React.SetStateAction<string>>;
   currentJury: Judge | null;
   setCurrentJury: React.Dispatch<React.SetStateAction<Judge | null>>;
-  currentStudent: { groupId: string; memberIdx: number; phone: string; name: string } | null;
-  setCurrentStudent: React.Dispatch<React.SetStateAction<{ groupId: string; memberIdx: number; phone: string; name: string } | null>>;
+  currentStudent: { studentId: string; phone: string; name: string } | null;
+  setCurrentStudent: React.Dispatch<React.SetStateAction<{ studentId: string; phone: string; name: string } | null>>;
 
   toasts: Toast[];
   addToast: (msg: string, type?: "success" | "error", title?: string) => void;
 
   slotInfo: (slotId: string | null) => { slot: Slot | undefined; filled: number };
-  groupRound1Avg: (g: Group) => number | null;
-  groupTotal: (g: Group) => number;
+  studentTotal: (s: Student) => number;
 }
 
 const StateContext = createContext<StateContextProps | undefined>(undefined);
 
 export function StateProvider({ children }: { children: React.ReactNode }) {
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
   const [slots] = useState<Slot[]>([
-    { id: "S1", label: "Day 1 · 9:00 – 10:30 AM", capacity: 40 },
-    { id: "S2", label: "Day 1 · 11:00 – 12:30 PM", capacity: 40 },
-    { id: "S3", label: "Day 1 · 2:00 – 3:30 PM", capacity: 40 },
+    { id: "S1", label: "3:00 PM – 4:00 PM", capacity: 40 },
+    { id: "S2", label: "5:00 PM – 6:00 PM", capacity: 40 },
+    { id: "S3", label: "7:00 PM – 8:00 PM", capacity: 40 },
   ]);
   const [rounds, setRounds] = useState<Record<string, "not-started" | "live" | "closed">>({
     round1: "not-started",
@@ -170,7 +133,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   const [collegeAdminName, setCollegeAdminName] = useState("Alliance University");
   const [collegeAdminId, setCollegeAdminId] = useState("");
   const [currentJury, setCurrentJury] = useState<Judge | null>(null);
-  const [currentStudent, setCurrentStudent] = useState<{ groupId: string; memberIdx: number; phone: string; name: string } | null>(null);
+  const [currentStudent, setCurrentStudent] = useState<{ studentId: string; phone: string; name: string } | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -203,8 +166,6 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    setGroups(buildSeedGroups());
-
     const fetchJudges = async () => {
       try {
         const res = await fetch("http://localhost:3001/api/judges");
@@ -219,29 +180,54 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
     fetchJudges();
   }, []);
 
+  useEffect(() => {
+    if (!collegeAdminId) return;
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch(`http://localhost:3001/api/students?college_id=${encodeURIComponent(collegeAdminId)}`);
+        const json = await res.json();
+        if (json.success) {
+          // Map DB snake_case fields back to camelCase
+          const mapped = json.data.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            email: s.email || "",
+            phone: s.phone,
+            collegeId: s.college_id,
+            college: collegeAdminName,
+            slotId: s.slot_id,
+            teamName: s.team_name || s.teamName || null,
+            round1Status: s.round1_status || "not-started",
+            r1Score: s.r1_score,
+            round2: { status: s.round2_status || "not-submitted", link: s.r2_link || "", note: s.r2_note || "", juryScore: s.r2_score || null }, 
+            round3: { status: s.round3_status || "not-submitted", link: s.r3_link || "", note: s.r3_note || "", juryScore: s.r3_score || null },
+          }));
+          setStudents(mapped);
+        }
+      } catch (err) {
+        console.error("Failed to load students:", err);
+      }
+    };
+    fetchStudents();
+  }, [collegeAdminId, collegeAdminName]);
+
   const slotInfo = (slotId: string | null) => {
     const slot = slots.find(s => s.id === slotId);
-    const filled = groups.filter(g => g.slotId === slotId).reduce((a, g) => a + g.members.length, 0);
+    const filled = students.filter(s => s.slotId === slotId).length;
     return { slot, filled };
   };
 
-  const groupRound1Avg = (g: Group) => {
-    const done = g.members.filter(m => m.r1Score !== null);
-    if (done.length === 0) return null;
-    return Math.round((done.reduce((a, m) => a + (m.r1Score || 0), 0) / done.length) * 10) / 10;
-  };
-
-  const groupTotal = (g: Group) => {
-    const r1 = groupRound1Avg(g) || 0;
-    const r2 = g.round2.juryScore || 0;
-    const r3 = g.round3.juryScore || 0;
+  const studentTotal = (s: Student) => {
+    const r1 = s.r1Score || 0;
+    const r2 = s.round2.juryScore || 0;
+    const r3 = s.round3.juryScore || 0;
     return Math.round((r1 + r2 + r3) * 10) / 10;
   };
 
   return (
     <StateContext.Provider
       value={{
-        groups, setGroups,
+        students, setStudents,
         judges, setJudges,
         slots,
         rounds, setRounds,
@@ -251,7 +237,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         currentJury, setCurrentJury,
         currentStudent, setCurrentStudent,
         toasts, addToast,
-        slotInfo, groupRound1Avg, groupTotal,
+        slotInfo, studentTotal,
       }}
     >
       {children}

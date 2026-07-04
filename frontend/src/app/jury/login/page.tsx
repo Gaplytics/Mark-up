@@ -9,13 +9,51 @@ export default function JuryLoginPage() {
   const router = useRouter();
   const { judges, setCurrentJury, addToast } = useStateContext();
   
-  const [loginJuryId, setLoginJuryId] = useState("J1");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleJuryLogin = () => {
-    const selectedJudge = judges.find(j => j.id === loginJuryId) || judges[0];
-    setCurrentJury(selectedJudge);
-    addToast("Welcome — ", "success", "Signed in as " + selectedJudge.name);
-    router.push("/jury/dashboard");
+  const handleJuryLogin = async () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      addToast("Please enter both email and password.", "error", "Missing info");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const res = await fetch("http://localhost:3001/api/jury/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword.trim() })
+      });
+      
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+
+      // Map DB judge to local state format
+      const dbJudge = data.judge;
+      let selectedJudge = judges.find(j => j.id === dbJudge.id);
+      
+      if (!selectedJudge) {
+        selectedJudge = {
+          id: dbJudge.id,
+          name: dbJudge.name,
+          email: dbJudge.email,
+          dept: "Jury Panel",
+        };
+      }
+
+      setCurrentJury(selectedJudge);
+      addToast("Welcome — ", "success", "Signed in as " + selectedJudge.name);
+      router.push("/jury/dashboard");
+    } catch (err: any) {
+      addToast(err.message || "Invalid credentials", "error", "Login failed");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -42,25 +80,54 @@ export default function JuryLoginPage() {
               ← Back to portal selection
             </Link>
             <h3 style={{ fontSize: 22, marginBottom: 6 }}>Jury sign in</h3>
-            <p style={{ color: "var(--slate-2)", fontSize: 13, marginBottom: 24 }}>For faculty appointed as MarkUp jurors.</p>
+            <p style={{ color: "var(--slate-2)", fontSize: 13, marginBottom: 24 }}>For faculty appointed as MarkUp jurys.</p>
             <div className="form-group">
               <label>Juror email</label>
-              <select className="input" value={loginJuryId} onChange={(e) => setLoginJuryId(e.target.value)}>
-                {judges.map(j => (
-                  <option key={j.id} value={j.id}>{j.name} — {j.email}</option>
-                ))}
-              </select>
+              <input 
+                className="input" 
+                placeholder="juror@example.com" 
+                value={loginEmail} 
+                onChange={(e) => setLoginEmail(e.target.value)} 
+              />
             </div>
-            <div className="form-group">
-              <label>Access code</label>
-              <input className="input" defaultValue="JURY-2026" />
+            <div className="form-group" style={{ position: "relative" }}>
+              <label>Password</label>
+              <input 
+                className="input" 
+                type={showPassword ? "text" : "password"} 
+                placeholder="Enter password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                disabled={isProcessing}
+              />
+              <span 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ 
+                  position: "absolute", 
+                  right: 14, 
+                  top: 36, 
+                  cursor: "pointer", 
+                  color: "var(--slate-2)"
+                }}
+              >
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                    <line x1="2" x2="22" y1="2" y2="22"/>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
+              </span>
             </div>
-            <button className="btn btn-primary btn-block" onClick={handleJuryLogin}>
-              Sign in to scoring panel
+            <button className="btn btn-primary btn-block" onClick={handleJuryLogin} disabled={isProcessing}>
+              {isProcessing ? "Authenticating..." : "Sign In"}
             </button>
-            <p style={{ fontSize: 11.5, color: "var(--slate-2)", marginTop: 14, textAlign: "center" }}>
-              Demo mode — any access code will sign you in.
-            </p>
           </div>
         </div>
       </div>

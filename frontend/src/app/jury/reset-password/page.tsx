@@ -11,6 +11,8 @@ export default function ResetPasswordPage() {
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
 
@@ -74,28 +76,46 @@ export default function ResetPasswordPage() {
         </p>
 
         <form onSubmit={handleResetPassword}>
-          <div className="form-group">
+          <div className="form-group" style={{ position: "relative" }}>
             <label>New Password</label>
             <input
               className="input"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Min. 6 characters"
+              style={{ paddingRight: "60px" }}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{ position: "absolute", right: "10px", top: "33px", background: "none", border: "none", color: "var(--slate-2)", cursor: "pointer", fontSize: "12px", fontWeight: "600" }}
+              tabIndex={-1}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ position: "relative" }}>
             <label>Confirm Password</label>
             <input
               className="input"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Repeat password"
+              style={{ paddingRight: "60px" }}
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{ position: "absolute", right: "10px", top: "33px", background: "none", border: "none", color: "var(--slate-2)", cursor: "pointer", fontSize: "12px", fontWeight: "600" }}
+              tabIndex={-1}
+            >
+              {showConfirmPassword ? "Hide" : "Show"}
+            </button>
           </div>
 
           <button
