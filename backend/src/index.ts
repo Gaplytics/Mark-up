@@ -639,6 +639,32 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
   }
 
   try {
+    // Check if the student already has a slot
+    const { data: student, error: studentError } = await supabaseAdmin
+      .from('students')
+      .select('slot_id, email, name')
+      .eq('id', id)
+      .single();
+
+    if (studentError || !student) {
+      return res.status(404).json({ success: false, error: 'Student not found.' });
+    }
+
+    if (student.slot_id) {
+      return res.status(400).json({ success: false, error: 'You have already selected a slot. You cannot change it.' });
+    }
+
+    // Get the slot label for the email
+    const { data: slotData, error: slotError } = await supabaseAdmin
+      .from('slots')
+      .select('label')
+      .eq('id', slotId)
+      .single();
+
+    if (slotError || !slotData) {
+      return res.status(404).json({ success: false, error: 'Slot not found.' });
+    }
+
     const { data, error } = await supabaseAdmin.rpc('assign_student_slot', {
       p_student_id: id,
       p_slot_id: slotId
@@ -651,6 +677,31 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
 
     if (data && !data.success) {
       return res.status(400).json({ success: false, error: data.error });
+    }
+
+    // Send confirmation email
+    try {
+      const mailOptions = {
+        from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+        to: student.email,
+        subject: 'MarkUp Test Slot Confirmed',
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 500px; border-radius: 8px;">
+            <h2 style="color: #FF5A5F; margin-bottom: 20px;">Slot Confirmed!</h2>
+            <p>Hello <strong>${student.name}</strong>,</p>
+            <p>Your test slot for the MarkUp competition has been successfully confirmed.</p>
+            <div style="background: #f4f4f4; padding: 16px; border-radius: 8px; margin: 20px 0; text-align: center;">
+              <div style="font-size: 12px; color: #555; text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Your Slot</div>
+              <div style="font-size: 20px; color: #333; font-weight: bold;">${slotData.label}</div>
+            </div>
+            <p style="font-size: 14px; color: #333;">Please ensure you are available during this time.</p>
+            <p style="font-size: 12px; color: #777; margin-top: 30px;">If you have any questions, please contact your College Admin.</p>
+          </div>
+        `
+      };
+      await transporter.sendMail(mailOptions);
+    } catch (mailErr) {
+      console.error("Failed to send slot confirmation email:", mailErr);
     }
 
     return res.json({ success: true, message: data?.message });

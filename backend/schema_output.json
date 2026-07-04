@@ -1,0 +1,42 @@
+{
+  "colleges": {
+    "id": "string",
+    "name": "string",
+    "email": "string",
+    "password": "string",
+    "created_at": "string"
+  },
+  "students": {
+    "id": "string",
+    "name": "string",
+    "email": "string",
+    "phone": "string",
+    "college_id": "string",
+    "slot_id": "nullable",
+    "round1_status": "string",
+    "round2_status": "string",
+    "round3_status": "string",
+    "created_at": "string",
+    "r1_score": "nullable",
+    "r2_score": "nullable",
+    "r3_score": "nullable",
+    "r2_link": "nullable",
+    "r2_note": "nullable",
+    "r3_link": "nullable",
+    "r3_note": "nullable"
+  },
+  "judges": {
+    "id": "string",
+    "name": "string",
+    "email": "string",
+    "dept": "string",
+    "college_id": "string",
+    "created_at": "string"
+  },
+  "slots": {
+    "id": "string",
+    "label": "string",
+    "capacity": "number",
+    "created_at": "string"
+  }
+}

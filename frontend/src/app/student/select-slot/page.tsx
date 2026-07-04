@@ -39,6 +39,7 @@ function SelectSlotContent() {
           setStudent(data.student);
           if (data.student.slotId) {
             setSelectedSlot(data.student.slotId);
+            setSuccess(true);
           }
         } else {
           setError(data.error || "Could not retrieve student details.");
@@ -126,7 +127,7 @@ function SelectSlotContent() {
           <div style={{ background: "#FCFBFA", border: "1px solid var(--line)", padding: 16, borderRadius: 12, marginBottom: 30 }}>
             <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--slate-2)", fontWeight: 700 }}>Chosen Slot</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: "var(--navy-2)", marginTop: 6 }}>
-              {slots.find(s => s.id === selectedSlot)?.time}
+              {slots.find(s => s.id === selectedSlot)?.label}
             </div>
           </div>
           <p style={{ color: "var(--slate-2)", fontSize: 12.5 }}>
