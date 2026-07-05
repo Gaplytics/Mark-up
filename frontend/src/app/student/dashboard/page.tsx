@@ -331,6 +331,24 @@ export default function StudentDashboardPage() {
       addToast("Add a video link or upload a file first.", "error", "Missing submission — ");
       return;
     }
+    
+    if (!currentStudent) return;
+
+    fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-round`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roundKey, link, note })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        addToast("Failed to sync submission to server.", "error");
+      }
+    })
+    .catch(err => {
+      console.error("Error submitting round:", err);
+      addToast("Failed to sync submission to server.", "error");
+    });
 
     setStudents(students.map(s => {
       if (s.id === currentStudent.studentId) {
@@ -366,7 +384,7 @@ export default function StudentDashboardPage() {
             </button>
           </div>
           <div className="brand">
-            <div className="mark">M</div>
+            <img src="/logo-icon.png" alt="Logo" style={{ width: "30px", height: "30px", marginRight: "8px", objectFit: "contain" }} />
             <div>
               <div className="name">MarkUp</div>
               <div className="sub">Concept to Campaign</div>
@@ -374,17 +392,21 @@ export default function StudentDashboardPage() {
           </div>
           <div className="side-portal-tag">Student</div>
           <div className="side-nav">
-            <div className={`side-link ${studentTab === "home" ? "active" : ""}`} onClick={() => setStudentTab("home")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">My Slot</span>
+            <div className={`side-link ${studentTab === "home" ? "active" : ""}`} onClick={() => setStudentTab("home")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              <span className="lbl">My Slot</span>
             </div>
-            <div className={`side-link ${studentTab === "round1" ? "active" : ""}`} onClick={() => setStudentTab("round1")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round 1 · Test</span>
+            <div className={`side-link ${studentTab === "round1" ? "active" : ""}`} onClick={() => setStudentTab("round1")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span className="lbl">Round 1 · Test</span>
             </div>
-            <div className={`side-link ${studentTab === "round2" ? "active" : ""}`} onClick={() => setStudentTab("round2")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round 2 · Reel</span>
+            <div className={`side-link ${studentTab === "round2" ? "active" : ""}`} onClick={() => setStudentTab("round2")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M23 7a2 2 0 0 0-2.45-1.45L16 7V5a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2l4.55 1.45A2 2 0 0 0 23 17V7z"></path></svg>
+              <span className="lbl">Round 2 · Reel</span>
             </div>
-            <div className={`side-link ${studentTab === "round3" ? "active" : ""}`} onClick={() => setStudentTab("round3")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round 3 · Demo Day</span>
+            <div className={`side-link ${studentTab === "round3" ? "active" : ""}`} onClick={() => setStudentTab("round3")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+              <span className="lbl">Round 3 · Demo Day</span>
             </div>
           </div>
           <div className="side-foot">

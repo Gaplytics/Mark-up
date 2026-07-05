@@ -441,7 +441,7 @@ export default function CollegeDashboardPage() {
             </button>
           </div>
           <div className="brand">
-            <div className="mark">M</div>
+            <img src="/logo-icon.png" alt="Logo" style={{ width: "30px", height: "30px", marginRight: "8px", objectFit: "contain" }} />
             <div>
               <div className="name">MarkUp</div>
               <div className="sub">Concept to Campaign</div>
@@ -449,20 +449,25 @@ export default function CollegeDashboardPage() {
           </div>
           <div className="side-portal-tag">College Admin</div>
           <div className="side-nav">
-            <div className={`side-link ${collegeTab === "overview" ? "active" : ""}`} onClick={() => { setCollegeTab("overview"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Overview</span>
+            <div className={`side-link ${collegeTab === "overview" ? "active" : ""}`} onClick={() => { setCollegeTab("overview"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+              <span className="lbl">Overview</span>
             </div>
-            <div className={`side-link ${collegeTab === "groups" ? "active" : ""}`} onClick={() => { setCollegeTab("groups"); setSelectedSlotFilter(null); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Manage Students</span>
+            <div className={`side-link ${collegeTab === "groups" ? "active" : ""}`} onClick={() => { setCollegeTab("groups"); setSelectedSlotFilter(null); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span className="lbl">Manage Students</span>
             </div>
-            <div className={`side-link ${collegeTab === "judges" ? "active" : ""}`} onClick={() => { setCollegeTab("judges"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Appoint Judges</span>
+            <div className={`side-link ${collegeTab === "judges" ? "active" : ""}`} onClick={() => { setCollegeTab("judges"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              <span className="lbl">Appoint Judges</span>
             </div>
-            <div className={`side-link ${collegeTab === "rounds" ? "active" : ""}`} onClick={() => { setCollegeTab("rounds"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round Control</span>
+            <div className={`side-link ${collegeTab === "rounds" ? "active" : ""}`} onClick={() => { setCollegeTab("rounds"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span className="lbl">Round Control</span>
             </div>
-            <div className={`side-link ${collegeTab === "dashboard" ? "active" : ""}`} onClick={() => { setCollegeTab("dashboard"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Live Dashboard</span>
+            <div className={`side-link ${collegeTab === "dashboard" ? "active" : ""}`} onClick={() => { setCollegeTab("dashboard"); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+              <span className="lbl">Live Dashboard</span>
             </div>
           </div>
           <div className="side-foot">
@@ -1124,7 +1129,7 @@ export default function CollegeDashboardPage() {
                         <button className="btn btn-outline-coral btn-block" onClick={() => handleCloseRound(c.key)}>Close round</button>
                       )}
                       {st === "closed" && (
-                        <button className="btn btn-ghost btn-block" disabled>Round closed</button>
+                        <button className="btn btn-coral btn-block" onClick={() => handleFlagOffRound(c.key)}>Re-open round</button>
                       )}
                     </div>
                   );
