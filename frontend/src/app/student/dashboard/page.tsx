@@ -757,12 +757,7 @@ export default function StudentDashboardPage() {
                     <>
                       <div className="section-title">Upload your {formatLabel}</div>
                       <div className="section-desc">Upload your individual {formatLabel} for {roundLabel}. Make sure all requirements are met.</div>
-                      {r.status === "pending" && (
-                        <div style={{ marginBottom: 16 }}>
-                          <StatusBadge status="pending" />
-                          <span style={{ fontSize: 12, color: "var(--slate-2)", marginLeft: 6 }}>Submitted — awaiting jury review</span>
-                        </div>
-                      )}
+
                       {r.status === "rejected" && (
                         <div style={{ marginBottom: 16, padding: 12, background: "var(--red-bg)", borderRadius: 9, fontSize: 12.5, color: "var(--red)" }}>
                           Jury requested changes{r.note ? ": " + r.note : ""}. Please re-upload below.
