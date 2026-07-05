@@ -21,6 +21,7 @@ export default function StudentDashboardPage() {
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
   const [timeLeft, setTimeLeft] = useState(2400); // 40 mins = 2400 secs
   const [examFinished, setExamFinished] = useState(false);
+  const [isDisqualified, setIsDisqualified] = useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isAcknowledged, setIsAcknowledged] = useState(false);
@@ -52,6 +53,45 @@ export default function StudentDashboardPage() {
       videoRef.current.srcObject = stream;
     }
   }, [stream, quizStarted]);
+
+  useEffect(() => {
+    if (!quizStarted || examFinished || isDisqualified) return;
+
+    const disqualify = () => {
+      if (isDisqualified) return;
+      setIsDisqualified(true);
+      addToast("You have been disqualified for violating proctoring rules.", "error", "Disqualified — ");
+      handleSubmitTest(false, 0);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) disqualify();
+    };
+    const handleBlur = () => { disqualify(); };
+    const handlePreventDefault = (e: Event) => { e.preventDefault(); };
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) disqualify();
+    };
+
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("copy", handlePreventDefault);
+    document.addEventListener("cut", handlePreventDefault);
+    document.addEventListener("paste", handlePreventDefault);
+    document.addEventListener("contextmenu", handlePreventDefault);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("copy", handlePreventDefault);
+      document.removeEventListener("cut", handlePreventDefault);
+      document.removeEventListener("paste", handlePreventDefault);
+      document.removeEventListener("contextmenu", handlePreventDefault);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizStarted, examFinished, isDisqualified]);
 
   useEffect(() => {
     if (!currentStudent) {
@@ -95,6 +135,14 @@ export default function StudentDashboardPage() {
         addToast("Camera and Microphone access are required to take the test.", "error", "Proctoring required — ");
         setIsLoadingQuestions(false);
         return;
+      }
+
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (err) {
+        console.error("Fullscreen request failed", err);
       }
 
       // Initialize adaptive testing starting with Easy
@@ -432,7 +480,7 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && (activeStudent.r1Score !== null || examFinished) && (
+                {rounds.round1 !== "not-started" && (activeStudent.r1Score !== null || examFinished) && !isDisqualified && (
                   <div className="empty">
                     <div className="ico">✅</div>
                     <div className="t">Thank you! Your exam has ended.</div>
@@ -440,7 +488,15 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && (
+                {rounds.round1 !== "not-started" && isDisqualified && (
+                  <div className="empty" style={{ borderColor: 'var(--red)', background: 'var(--red-bg)' }}>
+                    <div className="ico">🚨</div>
+                    <div className="t" style={{ color: 'var(--red)' }}>You have been disqualified</div>
+                    <p style={{ fontSize: 12.5, color: 'var(--red)' }}>A violation of the proctoring rules was detected (e.g. switching tabs, minimizing, or exiting fullscreen). Your test has been submitted with a score of 0.</p>
+                  </div>
+                )}
+
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (
                   <div className="card card-pad" style={{ maxWidth: "600px", margin: "0 auto" }}>
                     <div className="section-title" style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>Exam Instructions & Rules</div>
                     <div className="section-desc" style={{ marginBottom: "20px" }}>Please read the following instructions carefully before starting the exam.</div>
@@ -502,7 +558,7 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && !examFinished && (
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && !examFinished && !isDisqualified && (
                   <div className="card card-pad">
                     <style>{`
                       @keyframes pulse {
