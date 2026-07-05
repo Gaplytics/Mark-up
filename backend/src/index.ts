@@ -1135,6 +1135,142 @@ app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any>
   }
 });
 
+// =====================================
+// COLLEGE SETTINGS
+// =====================================
+app.get('/api/college-settings/:college_id', async (req: Request, res: Response): Promise<any> => {
+  const { college_id } = req.params;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('college_settings')
+      .select('*')
+      .eq('college_id', college_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("GET /api/college-settings error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    // Default to not-started if no settings exist yet
+    if (!data) {
+      return res.json({
+        success: true,
+        data: {
+          round1_status: 'not-started',
+          round2_status: 'not-started',
+          round3_status: 'not-started'
+        }
+      });
+    }
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("Unexpected error in GET /api/college-settings:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/college-settings/:college_id', async (req: Request, res: Response): Promise<any> => {
+  const { college_id } = req.params;
+  const { round1_status, round2_status, round3_status } = req.body;
+  
+  try {
+    const { error } = await supabaseAdmin
+      .from('college_settings')
+      .upsert({
+        college_id,
+        round1_status,
+        round2_status,
+        round3_status,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'college_id' });
+
+    if (error) {
+      console.error("POST /api/college-settings error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/college-settings:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =====================================
+// QUESTIONS BANK
+// =====================================
+app.get('/api/questions', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('Question_bank')
+      .select('*');
+
+    if (error) {
+      console.error("GET /api/questions error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    // Shuffle and select up to 40 questions
+    const shuffled = (data || []).sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 40);
+
+    return res.json({ success: true, data: selected });
+  } catch (err: any) {
+    console.error("Unexpected error in GET /api/questions:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =====================================
+// SCORE SUBMISSION
+// =====================================
+app.post('/api/students/:id/submit-score', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { score, round, total_questions } = req.body;
+  
+  if (score === undefined || !round) {
+    return res.status(400).json({ success: false, error: 'Missing fields' });
+  }
+
+  try {
+    // 1. Insert into scores table
+    const { error: scoreError } = await supabaseAdmin
+      .from('scores')
+      .insert([{
+        student_id: id,
+        round,
+        score,
+        total_questions: total_questions || 30,
+        submitted_at: new Date().toISOString()
+      }]);
+
+    if (scoreError) {
+      console.error("POST /api/students/:id/submit-score error:", scoreError);
+      return res.status(500).json({ success: false, error: scoreError.message });
+    }
+
+    // 2. Update students table directly
+    const { error: studentError } = await supabaseAdmin
+      .from('students')
+      .update({
+        r1_score: score,
+        round1_status: 'submitted'
+      })
+      .eq('id', id);
+
+    if (studentError) {
+      console.error("Update students r1_score error:", studentError);
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/students/:id/submit-score:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
 });

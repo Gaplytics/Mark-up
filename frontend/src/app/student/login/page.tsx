@@ -66,6 +66,7 @@ export default function StudentLoginPage() {
         studentId: dbStudent.id,
         phone: dbStudent.phone,
         name: dbStudent.name,
+        collegeId: dbStudent.collegeId,
       });
 
       addToast("Welcome, " + dbStudent.name.split(" ")[0] + "!", "success");

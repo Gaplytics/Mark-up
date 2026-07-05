@@ -374,17 +374,47 @@ export default function CollegeDashboardPage() {
     }
   };
 
-  const handleFlagOffRound = (roundKey: string) => {
-    setRounds({ ...rounds, [roundKey]: "live" });
+  const handleFlagOffRound = async (roundKey: string) => {
+    const newRounds = { ...rounds, [roundKey]: "live" };
+    setRounds(newRounds as any);
     if (roundKey === "round1") {
       setStudents(students.map(s => ({ ...s, round1Status: "in-progress" })));
     }
     addToast("Students can now begin " + roundKey.replace("round", "Round "), "success", "Round flagged off — ");
+    
+    try {
+      await fetch(`http://localhost:3001/api/college-settings/${collegeAdminId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          round1_status: newRounds.round1,
+          round2_status: newRounds.round2,
+          round3_status: newRounds.round3
+        })
+      });
+    } catch (err) {
+      console.error("Failed to sync round state", err);
+    }
   };
 
-  const handleCloseRound = (roundKey: string) => {
-    setRounds({ ...rounds, [roundKey]: "closed" });
+  const handleCloseRound = async (roundKey: string) => {
+    const newRounds = { ...rounds, [roundKey]: "closed" };
+    setRounds(newRounds as any);
     addToast(roundKey.replace("round", "Round ") + " is now closed for submissions.", "success");
+    
+    try {
+      await fetch(`http://localhost:3001/api/college-settings/${collegeAdminId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          round1_status: newRounds.round1,
+          round2_status: newRounds.round2,
+          round3_status: newRounds.round3
+        })
+      });
+    } catch (err) {
+      console.error("Failed to sync round state", err);
+    }
   };
 
   const handleLogout = () => {

@@ -17,6 +17,42 @@ export default function StudentDashboardPage() {
   const [studentLinks, setStudentLinks] = useState<Record<string, string>>({});
   const [studentNotes, setStudentNotes] = useState<Record<string, string>>({});
 
+  const [dbQuestions, setDbQuestions] = useState<any[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(2400); // 40 mins = 2400 secs
+  const [examFinished, setExamFinished] = useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isAcknowledged, setIsAcknowledged] = useState(false);
+
+  // Adaptive testing state variables
+  const [currentQuestion, setCurrentQuestion] = useState<any | null>(null);
+  const [currentQuestionNum, setCurrentQuestionNum] = useState<number>(1);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [testScore, setTestScore] = useState<number>(0);
+  const [consecEasyCorrect, setConsecEasyCorrect] = useState<number>(0);
+  const [consecHardWrong, setConsecHardWrong] = useState<number>(0);
+  const [currentDifficulty, setCurrentDifficulty] = useState<string>("Easy");
+  const [answeredIds, setAnsweredIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!quizStarted || examFinished) return;
+    if (timeLeft <= 0) {
+      handleSubmitTest(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setTimeLeft(timeLeft - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [quizStarted, timeLeft, examFinished]);
+
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream, quizStarted]);
+
   useEffect(() => {
     if (!currentStudent) {
       router.replace("/student/login");
@@ -29,40 +65,214 @@ export default function StudentDashboardPage() {
 
   if (!activeStudent) return null;
 
-  const handleStartTest = () => {
-    setQuizStarted(true);
-    setQuizAnswers({});
+  const selectRandomQuestion = (diff: string, excluded: Set<string>) => {
+    const pool = dbQuestions.filter(q => 
+      q.Difficulty?.toLowerCase() === diff.toLowerCase() && !excluded.has(q.Question)
+    );
+    if (pool.length === 0) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
   };
+
+  async function handleStartTest() {
+    setIsLoadingQuestions(true);
+    try {
+      const res = await fetch("http://localhost:3001/api/questions");
+      const json = await res.json();
+      if (!json.success) throw new Error("Failed to load questions");
+      if (!json.data || json.data.length === 0) {
+        addToast("No questions found in the database. Contact your admin.", "error");
+        setIsLoadingQuestions(false);
+        return;
+      }
+
+      const allQs = json.data;
+      setDbQuestions(allQs);
+
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setStream(mediaStream);
+      } catch (err) {
+        addToast("Camera and Microphone access are required to take the test.", "error", "Proctoring required — ");
+        setIsLoadingQuestions(false);
+        return;
+      }
+
+      // Initialize adaptive testing starting with Easy
+      const easyPool = allQs.filter((q: any) => q.Difficulty?.toLowerCase() === "easy");
+      let startQ = null;
+      let startDiff = "Easy";
+      if (easyPool.length > 0) {
+        startQ = easyPool[Math.floor(Math.random() * easyPool.length)];
+      } else {
+        startQ = allQs[Math.floor(Math.random() * allQs.length)];
+        startDiff = startQ.Difficulty || "Easy";
+      }
+
+      setCurrentQuestion(startQ);
+      setAnsweredIds(new Set([startQ.Question]));
+      setCurrentQuestionNum(1);
+      setSelectedOption(null);
+      setTestScore(0);
+      setConsecEasyCorrect(0);
+      setConsecHardWrong(0);
+      setCurrentDifficulty(startDiff);
+
+      setQuizStarted(true);
+      setTimeLeft(2400); // 40 minutes
+      setExamFinished(false);
+    } catch (err) {
+      addToast("Error preparing the test: " + err, "error");
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  }
 
   const handleSelectQuizOpt = (questionIdx: number, optionIdx: number) => {
     setQuizAnswers({ ...quizAnswers, [questionIdx]: optionIdx });
   };
 
-  const handleSubmitTest = () => {
-    const answeredCount = Object.keys(quizAnswers).length;
-    if (answeredCount < QUIZ.length) {
-      addToast("Answer all " + QUIZ.length + " questions before submitting.", "error", "Incomplete — ");
-      return;
-    }
-    let score = 0;
-    QUIZ.forEach((q, i) => {
-      if (quizAnswers[i] === q.correct) score++;
+  function handleSubmitTest(isTimeout = false, finalScore?: number) {
+    if (!currentStudent) return;
+    const scoreToSave = finalScore !== undefined ? finalScore : testScore;
+
+    // Send score to backend to insert into Supabase scores table
+    fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-score`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        score: scoreToSave,
+        round: "round1",
+        total_questions: 30
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        addToast("Score saved locally, but database sync failed.", "error");
+      }
+    })
+    .catch(err => {
+      console.error("Failed to sync score to database:", err);
+      addToast("Failed to sync score to database.", "error");
     });
 
     setStudents(students.map(s => {
       if (s.id === currentStudent.studentId) {
         return {
           ...s,
-          r1Score: score,
+          r1Score: scoreToSave,
           round1Status: "submitted",
         };
       }
       return s;
     }));
 
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+
     setQuizStarted(false);
-    addToast("Test submitted! You scored " + score + "/5.", "success", "Nice work — ");
-    setStudentTab("round1");
+    setExamFinished(true);
+    if (isTimeout) {
+      addToast("Time is up! Your test has been automatically submitted.", "error", "Exam ended — ");
+    } else {
+      addToast("Test submitted successfully!", "success", "Exam completed — ");
+    }
+  }
+
+  const handleNextQuestion = () => {
+    if (selectedOption === null) {
+      addToast("Please select an option before proceeding.", "error", "Selection required — ");
+      return;
+    }
+
+    // 1. Grade current question
+    const answeredText = selectedOption === 0 ? "Option A" :
+                         selectedOption === 1 ? "Option B" :
+                         selectedOption === 2 ? "Option C" :
+                         selectedOption === 3 ? "Option D" : "";
+    
+    const cleanCorrect = currentQuestion["Correct Option"]?.trim();
+    const isCorrect = 
+      (cleanCorrect === answeredText) || 
+      (cleanCorrect === "Option A" && selectedOption === 0) ||
+      (cleanCorrect === "Option B" && selectedOption === 1) ||
+      (cleanCorrect === "Option C" && selectedOption === 2) ||
+      (cleanCorrect === "Option D" && selectedOption === 3) ||
+      (cleanCorrect === "A" && selectedOption === 0) ||
+      (cleanCorrect === "B" && selectedOption === 1) ||
+      (cleanCorrect === "C" && selectedOption === 2) ||
+      (cleanCorrect === "D" && selectedOption === 3) ||
+      (cleanCorrect?.toLowerCase() === answeredText.toLowerCase());
+
+    const newScore = isCorrect ? testScore + 1 : testScore;
+    setTestScore(newScore);
+
+    // 2. Adjust counters & decide next difficulty
+    let nextDiff = currentDifficulty;
+    let newConsecEasy = consecEasyCorrect;
+    let newConsecHard = consecHardWrong;
+
+    const currentDiffLower = currentQuestion.Difficulty?.toLowerCase();
+    if (currentDiffLower === "easy") {
+      if (isCorrect) {
+        const updated = consecEasyCorrect + 1;
+        if (updated === 2) {
+          nextDiff = "Hard";
+          newConsecEasy = 0;
+        } else {
+          newConsecEasy = updated;
+        }
+      } else {
+        newConsecEasy = 0;
+      }
+      newConsecHard = 0;
+    } else if (currentDiffLower === "hard") {
+      if (!isCorrect) {
+        const updated = consecHardWrong + 1;
+        if (updated === 2) {
+          nextDiff = "Easy";
+          newConsecHard = 0;
+        } else {
+          newConsecHard = updated;
+        }
+      } else {
+        newConsecHard = 0;
+      }
+      newConsecEasy = 0;
+    }
+
+    setConsecEasyCorrect(newConsecEasy);
+    setConsecHardWrong(newConsecHard);
+    setCurrentDifficulty(nextDiff);
+
+    // If this was the 30th question, submit test
+    if (currentQuestionNum >= 30) {
+      handleSubmitTest(false, newScore);
+      return;
+    }
+
+    // 3. Find next question matching difficulty
+    const nextQuestion = selectRandomQuestion(nextDiff, answeredIds);
+    if (!nextQuestion) {
+      const fallbackDiff = nextDiff === "Easy" ? "Hard" : "Easy";
+      const fallbackQuestion = selectRandomQuestion(fallbackDiff, answeredIds);
+      if (!fallbackQuestion) {
+        addToast("No more questions available in the bank.", "error");
+        handleSubmitTest(false, newScore);
+        return;
+      }
+      setCurrentQuestion(fallbackQuestion);
+      setAnsweredIds(prev => new Set([...prev, fallbackQuestion.Question]));
+      setCurrentDifficulty(fallbackDiff);
+    } else {
+      setCurrentQuestion(nextQuestion);
+      setAnsweredIds(prev => new Set([...prev, nextQuestion.Question]));
+    }
+
+    setCurrentQuestionNum(prev => prev + 1);
+    setSelectedOption(null);
   };
 
   const handleStudentRoundSubmit = (roundKey: "round2" | "round3") => {
@@ -222,45 +432,143 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score !== null && (
+                {rounds.round1 !== "not-started" && (activeStudent.r1Score !== null || examFinished) && (
                   <div className="empty">
                     <div className="ico">✅</div>
-                    <div className="t">You've completed the Round 1 test</div>
-                    <p style={{ fontSize: 12.5 }}>Your score: <b>{activeStudent.r1Score} / 5</b>.</p>
+                    <div className="t">Thank you! Your exam has ended.</div>
+                    <p style={{ fontSize: 12.5 }}>Your test has been successfully submitted. You may now close this window.</p>
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && (
-                  <div className="card card-pad">
-                    <div className="section-title">Ready to begin?</div>
-                    <div className="section-desc">This is a timed, individual test. You can only attempt it once, within your assigned slot.</div>
-                    <div style={{ padding: 14, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA", marginBottom: 18 }}>
-                      <div style={{ fontSize: 13 }}>🕒 Your slot: <b>{slotInfo(activeStudent.slotId).slot?.label}</b></div>
-                      <div style={{ fontSize: 13, marginTop: 6 }}>📝 5 multiple-choice questions · 1 mark each</div>
-                      <div style={{ fontSize: 13, marginTop: 6 }}>⏱ Suggested time: 8 minutes</div>
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && (
+                  <div className="card card-pad" style={{ maxWidth: "600px", margin: "0 auto" }}>
+                    <div className="section-title" style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>Exam Instructions & Rules</div>
+                    <div className="section-desc" style={{ marginBottom: "20px" }}>Please read the following instructions carefully before starting the exam.</div>
+                    
+                    <div style={{ 
+                      padding: "16px", 
+                      border: "1px solid var(--line)", 
+                      borderRadius: "10px", 
+                      background: "#FCFBFA", 
+                      marginBottom: "20px",
+                      textAlign: "left"
+                    }}>
+                      <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", color: "var(--slate-1)" }}>
+                        🕒 Your slot: <b>{slotInfo(activeStudent.slotId).slot?.label}</b>
+                      </div>
+                      
+                      <ul style={{ 
+                        fontSize: "13px", 
+                        lineHeight: "1.6", 
+                        color: "var(--slate-1)", 
+                        paddingLeft: "20px",
+                        margin: 0
+                      }}>
+                        <li style={{ marginBottom: "8px" }}>📝 <b>Format:</b> There will be exactly <b>30 questions</b>.</li>
+                        <li style={{ marginBottom: "8px" }}>⏱️ <b>Duration:</b> You have <b>40 minutes</b> to complete the test (strict auto-submission).</li>
+                        <li style={{ marginBottom: "8px" }}>🚫 <b>No Backtracking:</b> After answering a question, you <b>cannot go back</b> to review or change it.</li>
+                        <li style={{ marginBottom: "8px" }}>✅ <b>Marking:</b> There is <b>no negative marking</b>.</li>
+                        <li style={{ marginBottom: "8px" }}>⚠️ <b>Proctoring:</b> Your Camera and Microphone must be turned <b>ON</b>. The system monitors your hardware status continuously.</li>
+                        <li style={{ marginBottom: "8px" }}>🚨 <b>Disqualification:</b> You will be automatically disqualified if you attempt to cheat (e.g. switching tabs, minimizing browser, or having other people in the room).</li>
+                      </ul>
                     </div>
-                    <button className="btn btn-coral btn-block" onClick={handleStartTest}>Start test</button>
+
+                    <label style={{ 
+                      display: "flex", 
+                      alignItems: "flex-start", 
+                      gap: "10px", 
+                      fontSize: "13px", 
+                      color: "var(--slate-1)",
+                      cursor: "pointer",
+                      marginBottom: "22px",
+                      textAlign: "left"
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isAcknowledged} 
+                        onChange={(e) => setIsAcknowledged(e.target.checked)} 
+                        style={{ marginTop: "3px" }}
+                      />
+                      <span>I acknowledge that I have read the rules and agree to keep my camera/microphone active during the exam. I understand that violating these rules will lead to immediate disqualification.</span>
+                    </label>
+
+                    <button 
+                      className="btn btn-coral btn-block" 
+                      onClick={handleStartTest} 
+                      disabled={isLoadingQuestions || !isAcknowledged}
+                    >
+                      {isLoadingQuestions ? "Preparing exam & requesting media access..." : "Start test"}
+                    </button>
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && (
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && !examFinished && (
                   <div className="card card-pad">
+                    <style>{`
+                      @keyframes pulse {
+                        0% { opacity: 0.3; }
+                        50% { opacity: 1; }
+                        100% { opacity: 0.3; }
+                      }
+                    `}</style>
                     <div className="row-between" style={{ marginBottom: 14 }}>
                       <div className="section-title" style={{ marginBottom: 0 }}>Round 1 Test</div>
-                      <span className="badge badge-amber">Question progress: <span id="qProgress">{Object.keys(quizAnswers).length}</span>/5 answered</span>
-                    </div>
-                    {QUIZ.map((q, qi) => (
-                      <div key={qi} className="quiz-q">
-                        <div className="qtext">{qi + 1}. {q.q}</div>
-                        {q.opts.map((o, oi) => (
-                          <label key={oi} className={`opt ${quizAnswers[qi] === oi ? "selected" : ""}`} onClick={() => handleSelectQuizOpt(qi, oi)}>
-                            <input type="radio" name={`q${qi}`} checked={quizAnswers[qi] === oi} readOnly />
-                            <span>{o}</span>
-                          </label>
-                        ))}
+                      <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                        <span className="badge badge-amber">Time Left: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}</span>
+                        <span className="badge badge-navy">Progress: {currentQuestionNum}/30 answered</span>
                       </div>
-                    ))}
-                    <button className="btn btn-coral btn-block" onClick={handleSubmitTest} style={{ marginTop: 10 }}>Submit test</button>
+                    </div>
+
+                    {/* Fake Camera Proctoring Widget (Webcam active but hidden) */}
+                    <div style={{
+                      position: "fixed",
+                      top: "80px",
+                      right: "20px",
+                      padding: "10px 16px",
+                      background: "rgba(15, 23, 42, 0.9)",
+                      borderRadius: "8px",
+                      boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+                      border: "1px solid #ef4444",
+                      zIndex: 1000,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px"
+                    }}>
+                      <span style={{
+                        width: "8px",
+                        height: "8px",
+                        background: "#ef4444",
+                        borderRadius: "50%",
+                        animation: "pulse 1s infinite"
+                      }}></span>
+                      <span style={{ color: "#f8fafc", fontSize: "12px", fontWeight: "bold", letterSpacing: "0.5px" }}>
+                        PROCTORING ACTIVE
+                      </span>
+                      <video ref={videoRef} autoPlay playsInline muted style={{ display: "none" }} />
+                    </div>
+
+                    {currentQuestion && (() => {
+                      const opts = [
+                        currentQuestion["Option A"], 
+                        currentQuestion["Option B"], 
+                        currentQuestion["Option C"], 
+                        currentQuestion["Option D"]
+                      ];
+                      return (
+                        <div className="quiz-q">
+                          <div className="qtext">{currentQuestionNum}. {currentQuestion.Question}</div>
+                          {opts.map((o, oi) => (
+                            <label key={oi} className={`opt ${selectedOption === oi ? "selected" : ""}`} onClick={() => setSelectedOption(oi)}>
+                              <input type="radio" name={`q_${currentQuestion.id}`} checked={selectedOption === oi} readOnly />
+                              <span>{o}</span>
+                            </label>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    <button className="btn btn-coral btn-block" onClick={handleNextQuestion} style={{ marginTop: 10 }}>
+                      {currentQuestionNum === 30 ? "Submit test" : "Next Question"}
+                    </button>
                   </div>
                 )}
               </div>

@@ -103,8 +103,8 @@ interface StateContextProps {
   setCollegeAdminId: React.Dispatch<React.SetStateAction<string>>;
   currentJury: Judge | null;
   setCurrentJury: React.Dispatch<React.SetStateAction<Judge | null>>;
-  currentStudent: { studentId: string; phone: string; name: string } | null;
-  setCurrentStudent: React.Dispatch<React.SetStateAction<{ studentId: string; phone: string; name: string } | null>>;
+  currentStudent: { studentId: string; phone: string; name: string; collegeId: string } | null;
+  setCurrentStudent: React.Dispatch<React.SetStateAction<{ studentId: string; phone: string; name: string; collegeId: string } | null>>;
 
   toasts: Toast[];
   addToast: (msg: string, type?: "success" | "error", title?: string) => void;
@@ -130,7 +130,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   const [collegeAdminName, setCollegeAdminName] = useState("Alliance University");
   const [collegeAdminId, setCollegeAdminId] = useState("");
   const [currentJury, setCurrentJury] = useState<Judge | null>(null);
-  const [currentStudent, setCurrentStudent] = useState<{ studentId: string; phone: string; name: string } | null>(null);
+  const [currentStudent, setCurrentStudent] = useState<{ studentId: string; phone: string; name: string; collegeId: string } | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -152,6 +152,32 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("collegeAdminId", collegeAdminId);
     }
   }, [collegeAdminId]);
+
+  useEffect(() => {
+    const targetCollegeId = collegeAdminId || currentStudent?.collegeId;
+    if (!targetCollegeId) return;
+
+    const fetchRounds = async () => {
+      try {
+        const res = await fetch(`http://localhost:3001/api/college-settings/${encodeURIComponent(targetCollegeId)}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          setRounds({
+            round1: json.data.round1_status || "not-started",
+            round2: json.data.round2_status || "not-started",
+            round3: json.data.round3_status || "not-started",
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load rounds:", err);
+      }
+    };
+
+    fetchRounds();
+    // Poll for changes every 5 seconds for live sync
+    const interval = setInterval(fetchRounds, 5000);
+    return () => clearInterval(interval);
+  }, [collegeAdminId, currentStudent?.collegeId]);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = (msg: string, type?: "success" | "error", title?: string) => {
