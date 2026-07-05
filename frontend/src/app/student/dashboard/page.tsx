@@ -4,6 +4,59 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStateContext, StatusBadge, initials, QUIZ } from "@/context/StateContext";
 
+const renderVideoEmbed = (link: string) => {
+  if (!link) return null;
+  
+  // YouTube embed
+  const ytMatch = link.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?.*v=))([\w-]{11})/i);
+  if (ytMatch && ytMatch[1]) {
+    return (
+      <iframe 
+        width="100%" 
+        height="315" 
+        src={`https://www.youtube.com/embed/${ytMatch[1]}`} 
+        title="YouTube video player" 
+        frameBorder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowFullScreen 
+        style={{ borderRadius: "8px", marginTop: "12px" }}
+      ></iframe>
+    );
+  }
+  
+  // Google Drive embed
+  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch && driveMatch[1]) {
+    return (
+      <iframe 
+        src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
+        width="100%" 
+        height="315" 
+        allow="autoplay"
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+  
+  // Direct MP4
+  if (link.toLowerCase().endsWith('.mp4')) {
+    return (
+      <video width="100%" height="315" controls style={{ borderRadius: "8px", marginTop: "12px", background: "#000" }}>
+        <source src={link} type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    );
+  }
+  
+  // Fallback for unknown links
+  return (
+    <div style={{ marginTop: "12px", padding: "16px", background: "#f8f9fc", borderRadius: "8px", textAlign: "center", border: "1px dashed var(--line)" }}>
+      <p style={{ fontSize: "13px", color: "var(--slate-2)", marginBottom: "8px" }}>This link format cannot be embedded directly.</p>
+      <a href={link} target="_blank" rel="noreferrer" className="btn btn-outline-coral btn-sm" style={{ textDecoration: "none" }}>Open Video ↗</a>
+    </div>
+  );
+};
+
 export default function StudentDashboardPage() {
   const router = useRouter();
   const { students, setStudents, currentStudent, setCurrentStudent, rounds, addToast, slotInfo } = useStateContext();
@@ -677,7 +730,25 @@ export default function StudentDashboardPage() {
                       <div className="empty">
                         <div className="ico">🎉</div>
                         <div className="t">Your {formatLabel} was approved!</div>
-                        <p style={{ fontSize: 12.5 }}>Score from jury: <b>{r.juryScore !== null ? r.juryScore + "/10" : "Pending"}</b></p>
+                        <p style={{ fontSize: 12.5, marginBottom: 16 }}>Score from jury: <b>{r.juryScore !== null ? r.juryScore + "/10" : "Pending"}</b></p>
+                        {r.link && (
+                          <div style={{ width: "100%", maxWidth: "500px", margin: "0 auto" }}>
+                            {renderVideoEmbed(r.link)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (r.status === "pending") {
+                    return (
+                      <div className="empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+                        <div className="ico">📤</div>
+                        <div className="t">Submission Awaiting Review</div>
+                        <p style={{ fontSize: 12.5, marginBottom: 16 }}>You have submitted your {formatLabel}. The jury is currently reviewing it.</p>
+                        <div style={{ width: "100%", maxWidth: "500px" }}>
+                          {renderVideoEmbed(r.link)}
+                        </div>
                       </div>
                     );
                   }
@@ -697,11 +768,6 @@ export default function StudentDashboardPage() {
                           Jury requested changes{r.note ? ": " + r.note : ""}. Please re-upload below.
                         </div>
                       )}
-                      <div className="upload-drop" style={{ marginBottom: 18 }}>
-                        <div className="ico">🎬</div>
-                        <div className="t">Drag & drop your video file</div>
-                        <div className="d">MP4 — under 200MB — or paste a link below</div>
-                      </div>
                       <div className="form-group">
                         <label>Reel / video link</label>
                         <input
@@ -709,16 +775,6 @@ export default function StudentDashboardPage() {
                           placeholder="https://drive.google.com/..."
                           value={studentLinks[roundKey] || r.link || ""}
                           onChange={(e) => setStudentLinks({ ...studentLinks, [roundKey]: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label>Note to jury (optional)</label>
-                        <textarea
-                          className="input"
-                          rows={2}
-                          placeholder="Anything the jury should know"
-                          value={studentNotes[roundKey] || r.note || ""}
-                          onChange={(e) => setStudentNotes({ ...studentNotes, [roundKey]: e.target.value })}
                         />
                       </div>
                       <button className="btn btn-coral btn-block" onClick={() => handleStudentRoundSubmit(roundKey)}>Submit for review</button>

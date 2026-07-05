@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStateContext, Student, Judge, StatusBadge, initials } from "@/context/StateContext";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function CollegeDashboardPage() {
   const router = useRouter();
@@ -16,7 +18,7 @@ export default function CollegeDashboardPage() {
     rounds, setRounds,
     gaplytiqUploadRequested, setGaplytiqUploadRequested,
     addToast,
-    slotInfo, studentTotal
+    slotInfo, studentAverage
   } = useStateContext();
 
   const [collegeTab, setCollegeTab] = useState("overview");
@@ -414,6 +416,38 @@ export default function CollegeDashboardPage() {
       });
     } catch (err) {
       console.error("Failed to sync round state", err);
+    }
+  };
+
+  const handleExportPDF = () => {
+    try {
+      const doc = new jsPDF();
+      doc.text("Live Leaderboard - MarkUp", 14, 15);
+      
+      const tableData = [...students]
+        .map(s => ({ s, avg: studentAverage(s) }))
+        .sort((a, b) => b.avg - a.avg)
+        .map((r, i) => [
+          `#${i + 1}`,
+          r.s.name,
+          r.s.r1Score !== null ? "Tested" : "—",
+          r.s.r1Score !== null ? r.s.r1Score.toFixed(1) : "—",
+          r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : (r.s.round2.status === "pending" ? "Pending" : "Not submitted"),
+          r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : (r.s.round3.status === "pending" ? "Pending" : "Not submitted"),
+          r.avg.toFixed(1)
+        ]);
+
+      autoTable(doc, {
+        head: [["Rank", "Student", "R1 Status", "R1 Score", "R2 Score", "R3 Score", "Average"]],
+        body: tableData,
+        startY: 20
+      });
+
+      doc.save("leaderboard.pdf");
+      addToast("Live dashboard exported as PDF.", "success", "Exported ");
+    } catch (err: any) {
+      console.error(err);
+      addToast("Failed to generate PDF.", "error");
     }
   };
 
@@ -1175,7 +1209,7 @@ export default function CollegeDashboardPage() {
                 <div className="card card-pad">
                   <div className="row-between" style={{ marginBottom: 6 }}>
                     <div className="section-title">Live leaderboard — who participated, who scored</div>
-                    <button className="btn btn-ghost btn-sm" onClick={() => addToast("Live dashboard exported as CSV (demo).", "success", "Exported ")}>⬇ Export CSV</button>
+                    <button className="btn btn-ghost btn-sm" onClick={handleExportPDF}>⬇ Export PDF</button>
                   </div>
                   <div className="section-desc">Refreshes automatically as students complete the test and submit content.</div>
                   <div className="scrollx">
@@ -1188,13 +1222,13 @@ export default function CollegeDashboardPage() {
                           <th>R1 Score</th>
                           <th>R2 Status</th>
                           <th>R3 Status</th>
-                          <th>Cumulative</th>
+                          <th>Average</th>
                         </tr>
                       </thead>
                       <tbody>
                         {[...students]
-                          .map(s => ({ s, total: studentTotal(s) }))
-                          .sort((a, b) => b.total - a.total)
+                          .map(s => ({ s, avg: studentAverage(s) }))
+                          .sort((a, b) => b.avg - a.avg)
                           .map((r, i) => (
                             <tr key={r.s.id}>
                               <td><b>#{i + 1}</b></td>
@@ -1204,9 +1238,9 @@ export default function CollegeDashboardPage() {
                               </td>
                               <td>{r.s.r1Score !== null ? "Tested" : "—"}</td>
                               <td>{r.s.r1Score !== null ? r.s.r1Score.toFixed(1) : "—"}</td>
-                              <td><StatusBadge status={r.s.round2.status} /></td>
-                              <td><StatusBadge status={r.s.round3.status} /></td>
-                              <td><b>{r.total.toFixed(1)}</b></td>
+                              <td>{r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : <StatusBadge status={r.s.round2.status} />}</td>
+                              <td>{r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : <StatusBadge status={r.s.round3.status} />}</td>
+                              <td><b>{r.avg.toFixed(1)}</b></td>
                             </tr>
                           ))}
                       </tbody>

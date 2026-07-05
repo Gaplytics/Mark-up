@@ -116,7 +116,7 @@ export default function SuperadminDashboardPage() {
             </button>
           </div>
           <div className="brand">
-            <div className="mark">M</div>
+            <img src="/logo-icon.png" alt="Logo" style={{ width: "30px", height: "30px", marginRight: "8px", objectFit: "contain" }} />
             <div>
               <div className="name">MarkUp</div>
               <div className="sub">Concept to Campaign</div>

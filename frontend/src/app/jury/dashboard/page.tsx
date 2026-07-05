@@ -4,6 +4,59 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStateContext, StatusBadge, initials } from "@/context/StateContext";
 
+const renderVideoEmbed = (link: string) => {
+  if (!link) return null;
+  
+  // YouTube embed
+  const ytMatch = link.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?.*v=))([\w-]{11})/i);
+  if (ytMatch && ytMatch[1]) {
+    return (
+      <iframe 
+        width="100%" 
+        height="315" 
+        src={`https://www.youtube.com/embed/${ytMatch[1]}`} 
+        title="YouTube video player" 
+        frameBorder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowFullScreen 
+        style={{ borderRadius: "8px", marginTop: "12px" }}
+      ></iframe>
+    );
+  }
+  
+  // Google Drive embed
+  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch && driveMatch[1]) {
+    return (
+      <iframe 
+        src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
+        width="100%" 
+        height="315" 
+        allow="autoplay"
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+  
+  // Direct MP4
+  if (link.toLowerCase().endsWith('.mp4')) {
+    return (
+      <video width="100%" height="315" controls style={{ borderRadius: "8px", marginTop: "12px", background: "#000" }}>
+        <source src={link} type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    );
+  }
+  
+  // Fallback for unknown links
+  return (
+    <div style={{ marginTop: "12px", padding: "16px", background: "#f8f9fc", borderRadius: "8px", textAlign: "center", border: "1px dashed var(--line)" }}>
+      <p style={{ fontSize: "13px", color: "var(--slate-2)", marginBottom: "8px" }}>This link format cannot be embedded directly.</p>
+      <a href={link} target="_blank" rel="noreferrer" className="btn btn-outline-coral btn-sm">Open Video in New Tab ↗</a>
+    </div>
+  );
+};
+
 const StarRating = ({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) => {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -233,12 +286,12 @@ export default function JuryDashboardPage() {
                   </div>
                   <div className="card stat-card">
                     <div className="label">Round 2 awaiting review</div>
-                    <div className="value">{students.filter(s => s.round2.status === "pending").length}</div>
+                    <div className="value">{students.filter(s => s.round2.status === "pending" && s.round2.juryScore === null).length}</div>
                     <div className="delta">reels pending</div>
                   </div>
                   <div className="card stat-card">
                     <div className="label">Round 3 awaiting review</div>
-                    <div className="value">{students.filter(s => s.round3.status === "pending").length}</div>
+                    <div className="value">{students.filter(s => s.round3.status === "pending" && s.round3.juryScore === null).length}</div>
                     <div className="delta">films pending</div>
                   </div>
                 </div>
@@ -303,6 +356,17 @@ export default function JuryDashboardPage() {
                   </div>
                 );
               }
+
+              const allReviewed = submittedCandidates.every(s => s[roundKey]?.juryScore !== null);
+              if (allReviewed) {
+                return (
+                  <div className="card card-pad" style={{ textAlign: "center", padding: "40px" }}>
+                    <div style={{ fontSize: "36px", marginBottom: "12px" }}>🎉</div>
+                    <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--navy)" }}>All caught up!</div>
+                    <p style={{ color: "var(--slate-2)", fontSize: "13.5px", marginTop: "4px" }}>For now all the submitted reels have been reviewed.</p>
+                  </div>
+                );
+              }
               
               // Safe index clamping
               const safeIndex = candidateIndex >= submittedCandidates.length ? 0 : candidateIndex;
@@ -335,7 +399,7 @@ export default function JuryDashboardPage() {
                   const res = await fetch(`http://localhost:3001/api/students/${s.id}/jury-review`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ roundKey, score: averageScore })
+                    body: JSON.stringify({ roundKey, score: averageScore, status: "approved" })
                   });
                   const data = await res.json();
                   if (!data.success) throw new Error(data.error);
@@ -345,7 +409,7 @@ export default function JuryDashboardPage() {
                     if (item.id === s.id) {
                       return {
                         ...item,
-                        [roundKey]: { ...item[roundKey], juryScore: averageScore }
+                        [roundKey]: { ...item[roundKey], juryScore: averageScore, status: "approved" }
                       };
                     }
                     return item;
@@ -390,12 +454,17 @@ export default function JuryDashboardPage() {
                     </div>
                     
                     <div style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA", marginBottom: "20px" }}>
-                      <div style={{ fontSize: "13.5px", fontWeight: "600", color: "var(--navy)", marginBottom: "4px" }}>Submission Video Link</div>
-                      <div style={{ fontSize: "13px" }}>
-                        🔗 <a href={r.link} target="_blank" rel="noreferrer" style={{ color: "var(--navy-2)", fontWeight: 600, wordBreak: "break-all" }}>{r.link || "No link provided"}</a>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <div style={{ fontSize: "13.5px", fontWeight: "600", color: "var(--navy)" }}>Submission Video</div>
+                        {r.link && (
+                          <a href={r.link} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "var(--coral)", textDecoration: "none" }}>Open in new tab ↗</a>
+                        )}
                       </div>
+                      
+                      {r.link ? renderVideoEmbed(r.link) : <div style={{ fontSize: "13px", color: "var(--slate-2)", fontStyle: "italic", marginTop: 8 }}>No link provided</div>}
+                      
                       {r.note && (
-                        <div style={{ fontSize: "12.5px", color: "var(--slate-2)", marginTop: "8px", borderTop: "1px solid #f0f0f0", paddingTop: "8px" }}>
+                        <div style={{ fontSize: "12.5px", color: "var(--slate-2)", marginTop: "12px", borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
                           <b>Note to Jury:</b> {r.note}
                         </div>
                       )}

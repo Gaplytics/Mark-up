@@ -15,7 +15,7 @@ export default function LandingPage() {
           <div className="container">
             <div className="landing-top">
               <div className="brand">
-                <div className="mark">M</div>
+                <img src="/logo-icon.png" alt="Logo" style={{ width: "30px", height: "30px", marginRight: "8px", objectFit: "contain" }} />
                 <div>
                   <div className="name">MarkUp</div>
                   <div className="sub">Concept to Campaign</div>
@@ -27,10 +27,17 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="landing-hero">
-              <div className="eyebrow">Contest Operations Platform</div>
-              <h1>One platform to run MarkUp — from registration to results.</h1>
-              <p>Colleges manage groups and judges, students take the test and submit content in their slot, and jury score and approve every round — all in real time.</p>
+            <div className="landing-hero" style={{ padding: "80px 0 40px" }}>
+              <div className="eyebrow" style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(255, 255, 255, 0.08)", padding: "6px 14px", borderRadius: "100px", border: "1px solid rgba(255, 255, 255, 0.15)", marginBottom: "20px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--gold)" }}></span>
+                <span style={{ fontSize: "11px", fontWeight: "700", letterSpacing: "1px", textTransform: "uppercase", color: "var(--gold)" }}>Organised by Gaplytiq</span>
+              </div>
+              <h1 style={{ fontSize: "52px", fontWeight: "800", color: "#FFFFFF", lineHeight: "1.1", marginBottom: "20px" }}>
+                One platform to run MarkUp — from registration to results.
+              </h1>
+              <p style={{ fontSize: "17px", color: "#C7CDE8", maxWidth: "650px", lineHeight: "1.6", marginBottom: "30px" }}>
+                Welcome to the official portal for the <strong>MarkUp Contest</strong>, proudly organised by <strong>Gaplytiq</strong>. This unified operations platform handles candidate slots, real-time proctored examinations, video submissions, and live jury evaluations — all in one seamless flow.
+              </p>
             </div>
 
             <div className="portal-grid">

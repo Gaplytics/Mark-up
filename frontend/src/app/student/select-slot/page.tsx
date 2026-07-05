@@ -152,8 +152,8 @@ function SelectSlotContent() {
   return (
     <div className="login-wrap" style={{ justifyContent: "center", minHeight: "90vh" }}>
       <div className="login-box" style={{ maxWidth: 520, padding: 36 }}>
-        <div className="brand" style={{ marginBottom: 24 }}>
-          <div className="mark">M</div>
+        <div className="brand" style={{ marginBottom: 30 }}>
+          <img src="/logo-icon.png" alt="Logo" style={{ width: "30px", height: "30px", marginRight: "8px", objectFit: "contain" }} />
           <div>
             <div className="name">MarkUp</div>
             <div className="sub">Concept to Campaign</div>

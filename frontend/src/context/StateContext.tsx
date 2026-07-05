@@ -111,7 +111,7 @@ interface StateContextProps {
   addToast: (msg: string, type?: "success" | "error", title?: string) => void;
 
   slotInfo: (slotId: string | null) => { slot: Slot | undefined; filled: number };
-  studentTotal: (s: Student) => number;
+  studentAverage: (s: Student) => number;
 }
 
 const StateContext = createContext<StateContextProps | undefined>(undefined);
@@ -231,7 +231,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const targetCollegeId = collegeAdminId || currentJury?.collegeId;
+    const targetCollegeId = collegeAdminId || currentJury?.collegeId || currentStudent?.collegeId;
     if (!targetCollegeId) return;
 
     const fetchStudents = async () => {
@@ -261,7 +261,9 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
       }
     };
     fetchStudents();
-  }, [collegeAdminId, collegeAdminName, currentJury?.collegeId]);
+    const interval = setInterval(fetchStudents, 5000);
+    return () => clearInterval(interval);
+  }, [collegeAdminId, collegeAdminName, currentJury?.collegeId, currentStudent?.collegeId]);
 
   const slotInfo = (slotId: string | null) => {
     const slot = slots.find(s => s.id === slotId);
@@ -269,11 +271,14 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
     return { slot, filled };
   };
 
-  const studentTotal = (s: Student) => {
-    const r1 = s.r1Score || 0;
-    const r2 = s.round2.juryScore || 0;
-    const r3 = s.round3.juryScore || 0;
-    return Math.round((r1 + r2 + r3) * 10) / 10;
+  const studentAverage = (s: Student) => {
+    const scores: number[] = [];
+    if (s.r1Score !== null) scores.push(s.r1Score);
+    if (s.round2.juryScore !== null) scores.push(s.round2.juryScore);
+    if (s.round3.juryScore !== null) scores.push(s.round3.juryScore);
+    if (scores.length === 0) return 0;
+    const sum = scores.reduce((a, b) => a + b, 0);
+    return Math.round((sum / scores.length) * 10) / 10;
   };
 
   return (
@@ -289,7 +294,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
         currentJury, setCurrentJury,
         currentStudent, setCurrentStudent,
         toasts, addToast,
-        slotInfo, studentTotal,
+        slotInfo, studentAverage,
       }}
     >
       {children}
