@@ -45,7 +45,7 @@ export default function LandingPage() {
                 <div className="portal-card">
                   <div className="ico" style={{ background: "rgba(249,97,103,.18)", color: "var(--coral)" }}>🏫</div>
                   <h3>College Admin</h3>
-                  <p>Upload student groups, appoint jury, flag off rounds, and track everything on a live dashboard.</p>
+                  <p>Upload student teams, appoint jury, flag off rounds, and track everything on a live dashboard.</p>
                   <div className="enter">Enter portal →</div>
                 </div>
               </Link>
@@ -53,7 +53,7 @@ export default function LandingPage() {
                 <div className="portal-card">
                   <div className="ico" style={{ background: "rgba(242,201,76,.2)", color: "#B8860B" }}>⚖️</div>
                   <h3>Jury</h3>
-                  <p>Review group submissions round by round, approve content, and score against contest criteria.</p>
+                  <p>Review team submissions round by round, approve content, and score against contest criteria.</p>
                   <div className="enter">Enter portal →</div>
                 </div>
               </Link>

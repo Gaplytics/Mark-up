@@ -64,9 +64,9 @@ export default function CollegeLoginPage() {
             </div>
           </div>
           <h2>Run MarkUp for your campus, end to end.</h2>
-          <p>Upload your participating groups, appoint your School of Business jury, flag off each round, and watch scores update live as teams compete.</p>
+          <p>Upload your participating teams, appoint your School of Business jury, flag off each round, and watch scores update live as teams compete.</p>
           <div className="pill-row">
-            <span className="pill">Group management</span>
+            <span className="pill">Team management</span>
             <span className="pill">Round control</span>
             <span className="pill">Live scoring dashboard</span>
           </div>

@@ -146,8 +146,16 @@ export default function JuryDashboardPage() {
       addToast("Failed to sync submission status to server.", "error");
     });
 
+    const targetStudent = students.find(s => s.id === sid);
+    const teamId = targetStudent?.teamId;
     setStudents(students.map(s => {
-      if (s.id === sid) {
+      if (teamId && s.teamId === teamId) {
+        return {
+          ...s,
+          [roundKey]: { ...s[roundKey], status },
+        };
+      }
+      if (!teamId && s.id === sid) {
         return {
           ...s,
           [roundKey]: { ...s[roundKey], status },
@@ -155,7 +163,6 @@ export default function JuryDashboardPage() {
       }
       return s;
     }));
-    const targetStudent = students.find(s => s.id === sid);
     addToast((targetStudent?.name || "Student") + "'s submission marked " + (status === "approved" ? "approved" : "needs changes") + ".", status === "approved" ? "success" : "error");
   };
 
@@ -183,8 +190,16 @@ export default function JuryDashboardPage() {
       addToast("Failed to sync score to server.", "error");
     });
 
+    const targetStudent = students.find(s => s.id === sid);
+    const teamId = targetStudent?.teamId;
     setStudents(students.map(s => {
-      if (s.id === sid) {
+      if (teamId && s.teamId === teamId) {
+        return {
+          ...s,
+          [roundKey]: { ...s[roundKey], juryScore: val },
+        };
+      }
+      if (!teamId && s.id === sid) {
         return {
           ...s,
           [roundKey]: { ...s[roundKey], juryScore: val },
@@ -192,7 +207,6 @@ export default function JuryDashboardPage() {
       }
       return s;
     }));
-    const targetStudent = students.find(s => s.id === sid);
     addToast("Score saved for " + (targetStudent?.name || "student") + ".", "success");
   };
 

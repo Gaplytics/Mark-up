@@ -167,6 +167,11 @@ export default function StudentDashboardPage() {
   };
 
   async function handleStartTest() {
+    if (!activeStudent || activeStudent.round1Status === "submitted" || activeStudent.r1Score !== null) {
+      addToast("You have already submitted this test. You cannot retake it.", "error", "Access denied — ");
+      return;
+    }
+
     setIsLoadingQuestions(true);
     try {
       const res = await fetch("http://localhost:3001/api/questions");
@@ -376,7 +381,7 @@ export default function StudentDashboardPage() {
     setSelectedOption(null);
   };
 
-  const handleStudentRoundSubmit = (roundKey: "round2" | "round3") => {
+  const handleStudentRoundSubmit = async (roundKey: "round2" | "round3") => {
     const link = studentLinks[roundKey] || "";
     const note = studentNotes[roundKey] || "";
 
@@ -387,34 +392,35 @@ export default function StudentDashboardPage() {
     
     if (!currentStudent) return;
 
-    fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-round`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ roundKey, link, note })
-    })
-    .then(res => res.json())
-    .then(data => {
+    try {
+      const res = await fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-round`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roundKey, link, note })
+      });
+      const data = await res.json();
+
       if (!data.success) {
-        addToast("Failed to sync submission to server.", "error");
+        addToast(data.error || "Submission was rejected by the server.", "error", "Submission failed — ");
+        return;
       }
-    })
-    .catch(err => {
+
+      setStudents(students.map(s => {
+        if (s.id === currentStudent.studentId) {
+          return {
+            ...s,
+            [roundKey]: { status: "pending", link, note, juryScore: null },
+          };
+        }
+        return s;
+      }));
+
+      addToast("Submission sent for jury review.", "success", "Submitted — ");
+      setStudentTab(roundKey);
+    } catch (err) {
       console.error("Error submitting round:", err);
-      addToast("Failed to sync submission to server.", "error");
-    });
-
-    setStudents(students.map(s => {
-      if (s.id === currentStudent.studentId) {
-        return {
-          ...s,
-          [roundKey]: { status: "pending", link, note, juryScore: null },
-        };
-      }
-      return s;
-    }));
-
-    addToast("Submission sent for jury review.", "success", "Submitted — ");
-    setStudentTab(roundKey);
+      addToast("Network error: Could not reach the server.", "error", "Submission failed — ");
+    }
   };
 
   const handleLogout = () => {
@@ -489,8 +495,8 @@ export default function StudentDashboardPage() {
               <div className="sub">
                 {studentTab === "home" && "Your test slot and round status"}
                 {studentTab === "round1" && "Available only during your assigned slot, after Round 1 is flagged off"}
-                  {studentTab === "round2" && "Upload your group's 90-second Reel or Short"}
-                  {studentTab === "round3" && "Upload your group's 60-second co-created film"}
+                  {studentTab === "round2" && "Upload your team's 90-second Reel or Short"}
+                  {studentTab === "round3" && "Upload your team's 60-second co-created film"}
                 </div>
               </div>
           </div>
@@ -505,7 +511,7 @@ export default function StudentDashboardPage() {
                   <div style={{ padding: 16, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA", marginTop: 6 }}>
                     <div style={{ fontSize: 11.5, color: "var(--slate-2)", textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>Your assigned slot</div>
                     <div style={{ fontSize: 18, fontFamily: "Cambria, serif", marginTop: 6 }}>{slotInfo(activeStudent.slotId).slot?.label}</div>
-                    <div style={{ fontSize: 12.5, color: "var(--slate-2)", marginTop: 4 }}>Up to 40 students test together in this slot</div>
+                    <div style={{ fontSize: 12.5, color: "var(--slate-2)", marginTop: 4 }}>Up to 30 students test together in this slot</div>
                   </div>
                   <div className="stack" style={{ marginTop: 16 }}>
                     <div className="row-between" style={{ padding: "12px 14px", border: "1px solid var(--line)", borderRadius: 10 }}>
@@ -725,6 +731,18 @@ export default function StudentDashboardPage() {
                     );
                   }
 
+                  const isLeader = activeStudent.team && activeStudent.team.leaderId === activeStudent.id;
+
+                  if (!activeStudent.team) {
+                    return (
+                      <div className="empty">
+                        <div className="ico">⚠️</div>
+                        <div className="t">No Team Assigned</div>
+                        <p style={{ fontSize: 12.5 }}>You must be assigned to a team before submitting. Please contact your College Admin.</p>
+                      </div>
+                    );
+                  }
+
                   if (r.status === "approved") {
                     return (
                       <div className="empty">
@@ -745,10 +763,26 @@ export default function StudentDashboardPage() {
                       <div className="empty" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
                         <div className="ico">📤</div>
                         <div className="t">Submission Awaiting Review</div>
-                        <p style={{ fontSize: 12.5, marginBottom: 16 }}>You have submitted your {formatLabel}. The jury is currently reviewing it.</p>
+                        <p style={{ fontSize: 12.5, marginBottom: 16 }}>Your team has submitted the {formatLabel}. The jury is currently reviewing it.</p>
                         <div style={{ width: "100%", maxWidth: "500px" }}>
                           {renderVideoEmbed(r.link)}
                         </div>
+                      </div>
+                    );
+                  }
+
+                  if (!isLeader) {
+                    const leaderName = students.find(s => s.id === activeStudent.team?.leaderId)?.name || "your Team Leader";
+                    return (
+                      <div className="empty">
+                        <div className="ico">👥</div>
+                        <div className="t">{r.status === "rejected" ? "Changes Requested" : "Awaiting Submission"}</div>
+                        <p style={{ fontSize: 12.5, maxWidth: "420px", margin: "0 auto", lineHeight: 1.5 }}>
+                          {r.status === "rejected" 
+                            ? `The jury requested changes. Awaiting team re-submission from your Team Leader (${leaderName}).`
+                            : `Only the designated Team Leader (${leaderName}) can submit the ${formatLabel} for your team.`
+                          }
+                        </p>
                       </div>
                     );
                   }

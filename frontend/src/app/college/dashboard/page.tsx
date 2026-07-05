@@ -26,8 +26,6 @@ export default function CollegeDashboardPage() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [selectedSlotFilter, setSelectedSlotFilter] = useState<string | null>(null);
   const [teamFormationSlot, setTeamFormationSlot] = useState<string | null>(null);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [selectedTeamStudents, setSelectedTeamStudents] = useState<Set<string>>(new Set());
 
   const [judgeToRemove, setJudgeToRemove] = useState<string | null>(null);
   const [newStudent, setNewStudent] = useState({ name: "", email: "", phone: "" });
@@ -87,7 +85,7 @@ export default function CollegeDashboardPage() {
         slotId: dbStudent.slot_id,
         round1Status: dbStudent.round1_status || "not-started",
         r1Score: dbStudent.r1_score,
-        teamName: null,
+        teamId: null, team: null,
         round2: { status: "not-submitted", link: "", note: "", juryScore: null },
         round3: { status: "not-submitted", link: "", note: "", juryScore: null },
       };
@@ -223,7 +221,7 @@ export default function CollegeDashboardPage() {
                   collegeId: collegeAdminId,
                   college: collegeAdminName,
                   slotId: null,
-                  teamName: null,
+                  teamId: null, team: null,
                   round1Status: "not-started",
                   r1Score: null,
                   round2: { status: "not-submitted", link: "", note: "", juryScore: null },
@@ -303,7 +301,7 @@ export default function CollegeDashboardPage() {
   const handleToggleGaplytiq = () => {
     const nextVal = !gaplytiqUploadRequested;
     setGaplytiqUploadRequested(nextVal);
-    addToast(nextVal ? "Gaplytiq has been notified to upload your groups." : "Request withdrawn.", "success");
+    addToast(nextVal ? "Gaplytiq has been notified to upload your teams." : "Request withdrawn.", "success");
   };
 
   const [newJudgeName, setNewJudgeName] = useState("");
@@ -487,7 +485,7 @@ export default function CollegeDashboardPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
               <span className="lbl">Overview</span>
             </div>
-            <div className={`side-link ${collegeTab === "groups" ? "active" : ""}`} onClick={() => { setCollegeTab("groups"); setSelectedSlotFilter(null); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+            <div className={`side-link ${collegeTab === "teams" ? "active" : ""}`} onClick={() => { setCollegeTab("teams"); setSelectedSlotFilter(null); setIsMobileSidebarOpen(false); }} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span className="lbl">Manage Students</span>
             </div>
@@ -526,14 +524,14 @@ export default function CollegeDashboardPage() {
               <div>
                 <h2>
                   {collegeTab === "overview" && "Overview"}
-                  {collegeTab === "groups" && "Manage Students"}
+                  {collegeTab === "teams" && "Manage Students"}
                   {collegeTab === "judges" && "Appoint Judges"}
                 {collegeTab === "rounds" && "Round Control"}
                 {collegeTab === "dashboard" && "Live Dashboard"}
               </h2>
               <div className="sub">
                 {collegeTab === "overview" && "Everything happening across MarkUp, in real time"}
-                {collegeTab === "groups" && "Upload students via Excel, or let Gaplytiq handle it for you"}
+                {collegeTab === "teams" && "Upload students via Excel, or let Gaplytiq handle it for you"}
                 {collegeTab === "judges" && "Add School of Business faculty to the jury panel"}
                 {collegeTab === "rounds" && "Flag off and close each round when your campus is ready"}
                 {collegeTab === "dashboard" && "Real-time participation and scores, by student"}
@@ -596,14 +594,14 @@ export default function CollegeDashboardPage() {
                     <div className="stack" style={{ marginTop: 6 }}>
                       {slots.map(slot => {
                         const slotStudents = students.filter(s => s.slotId === slot.id);
-                        const unassignedInSlot = slotStudents.filter(s => !s.teamName);
-                        const alreadyGrouped = unassignedInSlot.length === 0 && slotStudents.length > 0;
+                        const unassignedInSlot = slotStudents.filter(s => !s.teamId);
+                        const alreadyTeamed = unassignedInSlot.length === 0 && slotStudents.length > 0;
                         return (
                           <div key={slot.id} style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
                             <div className="row-between">
                               <span style={{ fontWeight: 600 }}>{slot.label}</span>
-                              {alreadyGrouped ? (
-                                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 12, background: "rgba(34,197,94,0.12)", color: "#16a34a", fontWeight: 600 }}>✓ Grouped</span>
+                              {alreadyTeamed ? (
+                                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 12, background: "rgba(34,197,94,0.12)", color: "#16a34a", fontWeight: 600 }}>✓ Teamed</span>
                               ) : (
                                 <button
                                   className="btn btn-coral btn-sm"
@@ -614,20 +612,20 @@ export default function CollegeDashboardPage() {
                                     setIsProcessing(true);
                                     try {
                                       const shuffled = [...unassignedInSlot].sort(() => Math.random() - 0.5);
-                                      // Find existing groups and their sizes
-                                      const groupsMap: Record<string, string[]> = {};
+                                      // Find existing teams and their sizes
+                                      const teamsMap: Record<string, string[]> = {};
                                       slotStudents.forEach(s => {
-                                        if (s.teamName) {
-                                          if (!groupsMap[s.teamName]) groupsMap[s.teamName] = [];
-                                          groupsMap[s.teamName].push(s.id);
+                                        if (s.team?.name) {
+                                          if (!teamsMap[s.team?.name]) teamsMap[s.team?.name] = [];
+                                          teamsMap[s.team?.name].push(s.id);
                                         }
                                       });
 
                                       const allAssignments: Record<string, string> = {};
                                       let remaining = [...shuffled];
 
-                                      // Step 1: Fill incomplete groups first
-                                      for (const [gName, memberIds] of Object.entries(groupsMap)) {
+                                      // Step 1: Fill incomplete teams first
+                                      for (const [gName, memberIds] of Object.entries(teamsMap)) {
                                         if (memberIds.length < 5 && remaining.length > 0) {
                                           const spotsLeft = 5 - memberIds.length;
                                           const toAdd = remaining.splice(0, spotsLeft);
@@ -637,17 +635,17 @@ export default function CollegeDashboardPage() {
                                         }
                                       }
 
-                                      // Step 2: Create new groups of 5 from remaining (max 6 total)
+                                      // Step 2: Create new teams of 5 from remaining (max 6 total)
                                       const MAX_GROUPS = 6;
-                                      const existingGroupCount = Object.keys(groupsMap).length;
-                                      let newGroupIndex = 0;
-                                      const newGroups: { name: string; ids: string[] }[] = [];
+                                      const existingTeamCount = Object.keys(teamsMap).length;
+                                      let newTeamIndex = 0;
+                                      const newTeams: { name: string; ids: string[] }[] = [];
                                       for (let i = 0; i < remaining.length; i += 5) {
-                                        if (existingGroupCount + newGroupIndex >= MAX_GROUPS) break;
+                                        if (existingTeamCount + newTeamIndex >= MAX_GROUPS) break;
                                         const chunk = remaining.slice(i, i + 5);
-                                        const gName = `Group ${existingGroupCount + newGroupIndex + 1}`;
-                                        newGroupIndex++;
-                                        newGroups.push({ name: gName, ids: chunk.map(s => s.id) });
+                                        const gName = `Team ${existingTeamCount + newTeamIndex + 1}`;
+                                        newTeamIndex++;
+                                        newTeams.push({ name: gName, ids: chunk.map(s => s.id) });
                                         chunk.forEach(s => (allAssignments[s.id] = gName));
                                       }
 
@@ -655,50 +653,50 @@ export default function CollegeDashboardPage() {
                                       const assignedCount = Object.keys(allAssignments).length;
                                       const leftover = unassignedInSlot.length - assignedCount;
 
-                                      // Save fill-ups (assign to existing group names)
-                                      const fillUpsByGroup: Record<string, string[]> = {};
+                                      // Save fill-ups (assign to existing team names)
+                                      const fillUpsByTeam: Record<string, string[]> = {};
                                       for (const [sid, gName] of Object.entries(allAssignments)) {
-                                        if (!newGroups.find(g => g.name === gName)) {
-                                          if (!fillUpsByGroup[gName]) fillUpsByGroup[gName] = [];
-                                          fillUpsByGroup[gName].push(sid);
+                                        if (!newTeams.find(g => g.name === gName)) {
+                                          if (!fillUpsByTeam[gName]) fillUpsByTeam[gName] = [];
+                                          fillUpsByTeam[gName].push(sid);
                                         }
                                       }
-                                      for (const [gName, sids] of Object.entries(fillUpsByGroup)) {
+                                      for (const [gName, sids] of Object.entries(fillUpsByTeam)) {
                                         const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: sids, teamName: gName }) });
                                         const json = await res.json();
                                         if (!json.success) throw new Error(json.error);
                                       }
-                                      // Save new groups
-                                      for (const group of newGroups) {
-                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: group.ids, teamName: group.name }) });
+                                      // Save new teams
+                                      for (const team of newTeams) {
+                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: team.ids, teamName: team.name }) });
                                         const json = await res.json();
                                         if (!json.success) throw new Error(json.error);
                                       }
 
-                                      setStudents(prev => prev.map(s => allAssignments[s.id] ? { ...s, teamName: allAssignments[s.id] } : s));
-                                      const filledCount = Object.keys(fillUpsByGroup).length;
+                                      setStudents(prev => prev.map(s => allAssignments[s.id] ? { ...s, teamId: "temp", team: { id: "temp", name: allAssignments[s.id], leaderId: null } } : s));
+                                      const filledCount = Object.keys(fillUpsByTeam).length;
                                       if (leftover > 0) {
-                                        addToast(`Slot is full! All 6 groups are complete. ${leftover} student(s) could not be assigned.`, "error");
+                                        addToast(`Slot is full! All 6 teams are complete. ${leftover} student(s) could not be assigned.`, "error");
                                       } else {
                                         const msg = filledCount > 0
-                                          ? `Filled ${filledCount} existing group(s) and created ${newGroups.length} new group(s)!`
-                                          : `${newGroups.length} groups created for ${slot.label}!`;
+                                          ? `Filled ${filledCount} existing team(s) and created ${newTeams.length} new team(s)!`
+                                          : `${newTeams.length} teams created for ${slot.label}!`;
                                         addToast(msg, "success");
                                       }
-                                      // Send group notification emails
+                                      // Send team notification emails
                                       try {
-                                        await fetch("http://localhost:3001/api/groups/notify", {
+                                        await fetch("http://localhost:3001/api/teams/notify", {
                                           method: "POST",
                                           headers: { "Content-Type": "application/json" },
                                           body: JSON.stringify({ slotId: slot.id }),
                                         });
-                                        addToast("Group emails sent to all members!", "success");
+                                        addToast("Team emails sent to all members!", "success");
                                       } catch { /* email is non-critical */ }
-                                    } catch (err: any) { addToast("Auto-group failed: " + err.message, "error"); }
+                                    } catch (err: any) { addToast("Auto-team failed: " + err.message, "error"); }
                                     finally { setIsProcessing(false); }
                                   }}
                                 >
-                                  Form Groups
+                                  Form Teams
                                 </button>
                               )}
                             </div>
@@ -724,21 +722,21 @@ export default function CollegeDashboardPage() {
             )}
 
             {/* --- MANAGE STUDENTS --- */}
-            {collegeTab === "groups" && (
+            {collegeTab === "teams" && (
               <>
                 <div className="grid grid-2">
                   <div className="card card-pad">
                     <div className="section-title">Add a student manually</div>
                     <div className="section-desc">Phone numbers are how students will sign in with OTP.</div>
-                    <div className="form-group">
+                    <div className="form-team">
                       <label>Full Name</label>
                       <input className="input" placeholder="e.g. Aarav Sharma" value={newStudent.name} onChange={(e) => setNewStudent({...newStudent, name: e.target.value})} />
                     </div>
-                    <div className="form-group">
+                    <div className="form-team">
                       <label>Email Address</label>
                       <input className="input" placeholder="student@example.com" value={newStudent.email} onChange={(e) => setNewStudent({...newStudent, email: e.target.value})} />
                     </div>
-                    <div className="form-group">
+                    <div className="form-team">
                       <label>Mobile Number</label>
                       <input 
                         className="input" 
@@ -850,55 +848,16 @@ export default function CollegeDashboardPage() {
               const slotStudents = students.filter(s => s.slotId === teamFormationSlot);
               
               // Unassigned students in this slot
-              const unassigned = slotStudents.filter(s => !s.teamName);
+              const unassigned = slotStudents.filter(s => !s.teamId);
               
-              // Group assigned students by teamName
+              // Team assigned students by teamName
               const teamsMap: Record<string, typeof slotStudents> = {};
               slotStudents.forEach(s => {
-                if (s.teamName) {
-                  if (!teamsMap[s.teamName]) teamsMap[s.teamName] = [];
-                  teamsMap[s.teamName].push(s);
+                if (s.team?.name) {
+                  if (!teamsMap[s.team?.name]) teamsMap[s.team?.name] = [];
+                  teamsMap[s.team?.name].push(s);
                 }
               });
-
-              const handleCreateTeam = async () => {
-                if (!newTeamName.trim()) {
-                  addToast("Team name is required.", "error");
-                  return;
-                }
-                const studentIds = Array.from(selectedTeamStudents);
-                if (studentIds.length === 0) {
-                  addToast("Please select at least one student.", "error");
-                  return;
-                }
-
-                setIsProcessing(true);
-                try {
-                  const res = await fetch("http://localhost:3001/api/students/assign-team", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ studentIds, teamName: newTeamName.trim() })
-                  });
-                  const json = await res.json();
-                  if (!json.success) throw new Error(json.error);
-
-                  // Update local state
-                  setStudents(prev => prev.map(s => {
-                    if (studentIds.includes(s.id)) {
-                      return { ...s, teamName: newTeamName.trim() };
-                    }
-                    return s;
-                  }));
-
-                  setNewTeamName("");
-                  setSelectedTeamStudents(new Set());
-                  addToast(`Team "${newTeamName}" created successfully!`, "success");
-                } catch (err: any) {
-                  addToast("Failed to create team: " + err.message, "error");
-                } finally {
-                  setIsProcessing(false);
-                }
-              };
 
               const handleDisbandTeam = async (teamName: string, memberIds: string[]) => {
                 setIsProcessing(true);
@@ -914,7 +873,7 @@ export default function CollegeDashboardPage() {
                   // Update local state
                   setStudents(prev => prev.map(s => {
                     if (memberIds.includes(s.id)) {
-                      return { ...s, teamName: null };
+                      return { ...s, teamId: null, team: null };
                     }
                     return s;
                   }));
@@ -927,18 +886,9 @@ export default function CollegeDashboardPage() {
                 }
               };
 
-              const toggleTeamStudent = (id: string) => {
-                setSelectedTeamStudents(prev => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                });
-              };
-
-              const handleAutoGroup = async () => {
+              const handleAutoTeam = async () => {
                 if (unassigned.length === 0) {
-                  addToast("No unassigned students to group.", "error");
+                  addToast("No unassigned students to team.", "error");
                   return;
                 }
                 setIsProcessing(true);
@@ -949,7 +899,7 @@ export default function CollegeDashboardPage() {
                   const allAssignments: Record<string, string> = {};
                   let remaining = [...shuffled];
 
-                  // Step 1: Fill incomplete groups first
+                  // Step 1: Fill incomplete teams first
                   for (const [gName, memberIds] of Object.entries(teamsMap)) {
                     if (memberIds.length < GROUP_SIZE && remaining.length > 0) {
                       const spotsLeft = GROUP_SIZE - memberIds.length;
@@ -960,17 +910,17 @@ export default function CollegeDashboardPage() {
                     }
                   }
 
-                  // Step 2: Create new groups from remaining (max 6 total)
+                  // Step 2: Create new teams from remaining (max 6 total)
                   const MAX_GROUPS = 6;
-                  const existingGroupCount = Object.keys(teamsMap).length;
-                  let newGroupIndex = 0;
-                  const newGroups: { name: string; ids: string[] }[] = [];
+                  const existingTeamCount = Object.keys(teamsMap).length;
+                  let newTeamIndex = 0;
+                  const newTeams: { name: string; ids: string[] }[] = [];
                   for (let i = 0; i < remaining.length; i += GROUP_SIZE) {
-                    if (existingGroupCount + newGroupIndex >= MAX_GROUPS) break;
+                    if (existingTeamCount + newTeamIndex >= MAX_GROUPS) break;
                     const chunk = remaining.slice(i, i + GROUP_SIZE);
-                    const gName = `Group ${existingGroupCount + newGroupIndex + 1}`;
-                    newGroupIndex++;
-                    newGroups.push({ name: gName, ids: chunk.map(s => s.id) });
+                    const gName = `Team ${existingTeamCount + newTeamIndex + 1}`;
+                    newTeamIndex++;
+                    newTeams.push({ name: gName, ids: chunk.map(s => s.id) });
                     chunk.forEach(s => (allAssignments[s.id] = gName));
                   }
 
@@ -978,14 +928,14 @@ export default function CollegeDashboardPage() {
                   const leftover = unassigned.length - assignedCount;
 
                   // Save fill-ups
-                  const fillUpsByGroup: Record<string, string[]> = {};
+                  const fillUpsByTeam: Record<string, string[]> = {};
                   for (const [sid, gName] of Object.entries(allAssignments)) {
-                    if (!newGroups.find(g => g.name === gName)) {
-                      if (!fillUpsByGroup[gName]) fillUpsByGroup[gName] = [];
-                      fillUpsByGroup[gName].push(sid);
+                    if (!newTeams.find(g => g.name === gName)) {
+                      if (!fillUpsByTeam[gName]) fillUpsByTeam[gName] = [];
+                      fillUpsByTeam[gName].push(sid);
                     }
                   }
-                  for (const [gName, sids] of Object.entries(fillUpsByGroup)) {
+                  for (const [gName, sids] of Object.entries(fillUpsByTeam)) {
                     const res = await fetch("http://localhost:3001/api/students/assign-team", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
@@ -994,39 +944,39 @@ export default function CollegeDashboardPage() {
                     const json = await res.json();
                     if (!json.success) throw new Error(json.error);
                   }
-                  // Save new groups
-                  for (const group of newGroups) {
+                  // Save new teams
+                  for (const team of newTeams) {
                     const res = await fetch("http://localhost:3001/api/students/assign-team", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ studentIds: group.ids, teamName: group.name }),
+                      body: JSON.stringify({ studentIds: team.ids, teamName: team.name }),
                     });
                     const json = await res.json();
                     if (!json.success) throw new Error(json.error);
                   }
 
-                  setStudents(prev => prev.map(s => allAssignments[s.id] ? { ...s, teamName: allAssignments[s.id] } : s));
+                  setStudents(prev => prev.map(s => allAssignments[s.id] ? { ...s, teamId: "temp", team: { id: "temp", name: allAssignments[s.id], leaderId: null } } : s));
 
-                  const filledCount = Object.keys(fillUpsByGroup).length;
+                  const filledCount = Object.keys(fillUpsByTeam).length;
                   if (leftover > 0) {
-                    addToast(`Slot is full! All 6 groups are complete. ${leftover} student(s) could not be assigned.`, "error");
+                    addToast(`Slot is full! All 6 teams are complete. ${leftover} student(s) could not be assigned.`, "error");
                   } else {
                     const msg = filledCount > 0
-                      ? `Filled ${filledCount} existing group(s) and created ${newGroups.length} new group(s)!`
-                      : `${newGroups.length} groups of ~5 created automatically!`;
+                      ? `Filled ${filledCount} existing team(s) and created ${newTeams.length} new team(s)!`
+                      : `${newTeams.length} teams of ~5 created automatically!`;
                     addToast(msg, "success");
                   }
-                  // Send group notification emails
+                  // Send team notification emails
                   try {
-                    await fetch("http://localhost:3001/api/groups/notify", {
+                    await fetch("http://localhost:3001/api/teams/notify", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ slotId: teamFormationSlot }),
                     });
-                    addToast("Group emails sent to all members!", "success");
+                    addToast("Team emails sent to all members!", "success");
                   } catch { /* email is non-critical */ }
                 } catch (err: any) {
-                  addToast("Auto-group failed: " + err.message, "error");
+                  addToast("Auto-team failed: " + err.message, "error");
                 } finally {
                   setIsProcessing(false);
                 }
@@ -1050,9 +1000,9 @@ export default function CollegeDashboardPage() {
                         <button
                           className="btn btn-coral btn-sm"
                           disabled={isProcessing}
-                          onClick={handleAutoGroup}
+                          onClick={handleAutoTeam}
                         >
-                          {isProcessing ? "Grouping..." : `⚡ Form ${Math.ceil(unassigned.length / 5)} More Group${Math.ceil(unassigned.length / 5) !== 1 ? "s" : ""}`}
+                          {isProcessing ? "Teaming..." : `⚡ Form ${Math.ceil(unassigned.length / 5)} More Team${Math.ceil(unassigned.length / 5) !== 1 ? "s" : ""}`}
                         </button>
                       )}
                     </div>
@@ -1060,7 +1010,7 @@ export default function CollegeDashboardPage() {
                     <div className="stack">
                       {Object.keys(teamsMap).length === 0 ? (
                         <div style={{ padding: "40px 0", textAlign: "center", color: "var(--slate-2)", fontSize: 14 }}>
-                          No teams formed yet. Click "Form Groups" on the Overview to auto-create groups of 5.
+                          No teams formed yet. Click "Form Teams" on the Overview to auto-create teams of 5.
                         </div>
                       ) : (
                         Object.entries(teamsMap).map(([tName, members]) => (
@@ -1098,15 +1048,15 @@ export default function CollegeDashboardPage() {
                 <div className="card card-pad">
                   <div className="section-title">Appoint a judge</div>
                   <div className="section-desc">Add School of Business faculty to the jury panel for this contest.</div>
-                  <div className="form-group">
+                  <div className="form-team">
                     <label>Full name</label>
                     <input className="input" placeholder="Dr. Full Name" value={newJudgeName} onChange={(e) => setNewJudgeName(e.target.value)} />
                   </div>
-                  <div className="form-group">
+                  <div className="form-team">
                     <label>Email</label>
                     <input className="input" placeholder="name@alliance.edu.in" value={newJudgeEmail} onChange={(e) => setNewJudgeEmail(e.target.value)} />
                   </div>
-                  <div className="form-group">
+                  <div className="form-team">
                     <label>Department</label>
                     <input className="input" placeholder="e.g. Marketing" value={newJudgeDept} onChange={(e) => setNewJudgeDept(e.target.value)} />
                   </div>
@@ -1145,8 +1095,8 @@ export default function CollegeDashboardPage() {
               <div className="grid grid-3">
                 {[
                   { key: "round1", title: "Round 1 · Individual Test", desc: "Flagging off opens OTP login and test access for all students in their assigned slots." },
-                  { key: "round2", title: "Round 2 · 90-Sec Reel", desc: "Groups can upload their Reel/Short for jury review once this round is live." },
-                  { key: "round3", title: "Round 3 · Demo Day Film", desc: "Groups co-create and submit their 60-second film with Gaplytiq, then upload here." },
+                  { key: "round2", title: "Round 2 · 90-Sec Reel", desc: "Teams can upload their Reel/Short for jury review once this round is live." },
+                  { key: "round3", title: "Round 3 · Demo Day Film", desc: "Teams co-create and submit their 60-second film with Gaplytiq, then upload here." },
                 ].map(c => {
                   const st = rounds[c.key];
                   return (
@@ -1333,12 +1283,12 @@ export default function CollegeDashboardPage() {
       {showSlotModal && (() => {
         const slot = slots.find(s => s.id === showSlotModal);
         const slotStudents = students.filter(s => s.slotId === showSlotModal);
-        const ungrouped = slotStudents.filter(s => !s.teamName);
-        const groupsMap: Record<string, typeof slotStudents> = {};
+        const unteamed = slotStudents.filter(s => !s.teamId);
+        const teamsMap: Record<string, typeof slotStudents> = {};
         slotStudents.forEach(s => {
-          if (s.teamName) {
-            if (!groupsMap[s.teamName]) groupsMap[s.teamName] = [];
-            groupsMap[s.teamName].push(s);
+          if (s.team?.name) {
+            if (!teamsMap[s.team?.name]) teamsMap[s.team?.name] = [];
+            teamsMap[s.team?.name].push(s);
           }
         });
         return (
@@ -1347,14 +1297,14 @@ export default function CollegeDashboardPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: 18 }}>{slot?.label}</h3>
-                  <div style={{ fontSize: 13, color: 'var(--slate-2)', marginTop: 4 }}>{slotStudents.length} students · {Object.keys(groupsMap).length} groups formed</div>
+                  <div style={{ fontSize: 13, color: 'var(--slate-2)', marginTop: 4 }}>{slotStudents.length} students · {Object.keys(teamsMap).length} teams formed</div>
                 </div>
                 <button className="btn btn-ghost btn-sm" onClick={() => setShowSlotModal(null)}>Close</button>
               </div>
 
-              {Object.keys(groupsMap).length > 0 && (
+              {Object.keys(teamsMap).length > 0 && (
                 <div style={{ marginBottom: 20 }}>
-                  {Object.entries(groupsMap).map(([gName, members]) => (
+                  {Object.entries(teamsMap).map(([gName, members]) => (
                     <div key={gName} style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 14, background: '#fdfdfd', marginBottom: 10 }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--navy)', marginBottom: 8 }}>{gName} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--slate-2)' }}>({members.length} members)</span></div>
                       <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
@@ -1380,9 +1330,9 @@ export default function CollegeDashboardPage() {
                 </div>
               )}
 
-              {ungrouped.length > 0 && (
+              {unteamed.length > 0 && (
                 <div style={{ border: '1px solid var(--line)', borderRadius: 10, padding: 14, background: '#fdfdfd' }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--slate-2)', marginBottom: 8 }}>Ungrouped <span style={{ fontSize: 12, fontWeight: 400 }}>({ungrouped.length} students)</span></div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--slate-2)', marginBottom: 8 }}>Unteamed <span style={{ fontSize: 12, fontWeight: 400 }}>({unteamed.length} students)</span></div>
                   <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ fontSize: 11, color: 'var(--slate-2)' }}>
@@ -1392,7 +1342,7 @@ export default function CollegeDashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ungrouped.map(s => (
+                      {unteamed.map(s => (
                         <tr key={s.id} style={{ fontSize: 13, borderTop: '1px solid var(--line)' }}>
                           <td style={{ padding: '8px 4px', fontWeight: 500 }}>{s.name}</td>
                           <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.email}</td>

@@ -71,7 +71,7 @@ export default function JuryLoginPage() {
             </div>
           </div>
           <h2>Score with confidence, in one place.</h2>
-          <p>See exactly which groups are assigned to you, watch submissions arrive in real time, and approve or score content without leaving the page.</p>
+          <p>See exactly which teams are assigned to you, watch submissions arrive in real time, and approve or score content without leaving the page.</p>
           <div className="pill-row">
             <span className="pill">Round 2 reel review</span>
             <span className="pill">Round 3 demo-day review</span>

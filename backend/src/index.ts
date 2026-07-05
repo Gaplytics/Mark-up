@@ -464,7 +464,7 @@ app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise
   try {
     const { data: student, error } = await supabaseAdmin
       .from('students')
-      .select('*')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id)')
       .eq('email', normalizedEmail)
       .single();
 
@@ -484,7 +484,6 @@ app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise
       collegeName = college.name;
     }
 
-    const teamsData = getTeamsData();
     return res.json({
       success: true,
       student: {
@@ -495,7 +494,12 @@ app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise
         collegeId: student.college_id,
         college: collegeName,
         slotId: student.slot_id,
-        teamName: teamsData[student.id] || null,
+        teamId: student.team_id || null,
+        team: student.teams ? {
+          id: student.teams.id,
+          name: student.teams.name,
+          leaderId: student.teams.leader_id
+        } : null,
         round1Status: student.round1_status || "not-started",
         r1Score: student.r1_score,
         round2: {
@@ -551,7 +555,7 @@ app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> =
   try {
     const { data: student, error } = await supabaseAdmin
       .from('students')
-      .select('*')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id)')
       .eq('id', id)
       .maybeSingle();
 
@@ -570,7 +574,6 @@ app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> =
       collegeName = college.name;
     }
 
-    const teamsData = getTeamsData();
     return res.json({
       success: true,
       student: {
@@ -579,7 +582,12 @@ app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> =
         email: student.email,
         college: collegeName,
         slotId: student.slot_id,
-        teamName: teamsData[student.id] || null
+        teamId: student.team_id || null,
+        team: student.teams ? {
+          id: student.teams.id,
+          name: student.teams.name,
+          leaderId: student.teams.leader_id
+        } : null
       }
     });
   } catch (err: any) {
@@ -683,7 +691,7 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
     try {
       const { data: slotStudents } = await supabaseAdmin
         .from('students')
-        .select('id, team_name')
+        .select('id, team_id')
         .eq('slot_id', slotId)
         .not('id', 'eq', id);
 
@@ -691,8 +699,8 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
         // Check if any groups have been formed
         const groupCounts: Record<string, number> = {};
         slotStudents.forEach((s: any) => {
-          if (s.team_name) {
-            groupCounts[s.team_name] = (groupCounts[s.team_name] || 0) + 1;
+          if (s.team_id) {
+            groupCounts[s.team_id] = (groupCounts[s.team_id] || 0) + 1;
           }
         });
 
@@ -702,7 +710,7 @@ app.post('/api/students/:id/select-slot', async (req: Request, res: Response): P
           if (incompleteGroup) {
             await supabaseAdmin
               .from('students')
-              .update({ team_name: incompleteGroup[0] })
+              .update({ team_id: incompleteGroup[0] })
               .eq('id', id);
           }
           // If no incomplete group, student stays ungrouped (all 6 groups are full = slot is full)
@@ -754,7 +762,7 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('students')
-      .select('*')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id)')
       .eq('college_id', college_id)
       .order('created_at', { ascending: true });
 
@@ -762,10 +770,13 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
       console.error("GET /api/students error:", error);
       return res.status(500).json({ success: false, error: error.message });
     }
-    const teamsData = getTeamsData();
     const withTeams = (data || []).map((s: any) => ({
       ...s,
-      team_name: teamsData[s.id] || null
+      team: s.teams ? {
+        id: s.teams.id,
+        name: s.teams.name,
+        leaderId: s.teams.leader_id
+      } : null
     }));
     return res.json({ success: true, data: withTeams });
   } catch (err: any) {
@@ -775,25 +786,63 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
 });
 
 // Assign a list of students to a team name (or clear team assignment)
-app.post('/api/students/assign-team', (req: Request, res: Response): any => {
+app.post('/api/students/assign-team', async (req: Request, res: Response): Promise<any> => {
   const { studentIds, teamName } = req.body;
   if (!studentIds || !Array.isArray(studentIds)) {
     return res.status(400).json({ success: false, error: 'studentIds array is required' });
   }
 
   try {
-    const teamsData = getTeamsData();
-    
-    // Assign teamName (if null/empty, it unassigns)
-    studentIds.forEach((id: string) => {
-      if (teamName) {
-        teamsData[id] = teamName.trim();
-      } else {
-        delete teamsData[id];
-      }
-    });
+    if (!teamName) {
+      // Unassign team
+      const { error } = await supabaseAdmin
+        .from('students')
+        .update({ team_id: null })
+        .in('id', studentIds);
+      if (error) throw error;
+      return res.json({ success: true });
+    }
 
-    saveTeamsData(teamsData);
+    const trimmedName = teamName.trim();
+    // 1. Get college_id from first student (assuming they belong to the same college)
+    const { data: studentsData, error: sErr } = await supabaseAdmin
+      .from('students')
+      .select('college_id')
+      .in('id', studentIds)
+      .limit(1);
+    if (sErr || !studentsData || studentsData.length === 0) throw new Error("Could not fetch students");
+    const collegeId = studentsData[0].college_id;
+
+    // 2. Check if team exists for this college
+    let teamId;
+    const { data: teamData } = await supabaseAdmin
+      .from('teams')
+      .select('id')
+      .eq('college_id', collegeId)
+      .eq('name', trimmedName)
+      .maybeSingle();
+
+    if (teamData) {
+      teamId = teamData.id;
+    } else {
+      // Create new team, appointing a team leader randomly
+      const randomLeaderId = studentIds[Math.floor(Math.random() * studentIds.length)];
+      const { data: newTeam, error: tErr } = await supabaseAdmin
+        .from('teams')
+        .insert([{ name: trimmedName, college_id: collegeId, leader_id: randomLeaderId }])
+        .select()
+        .single();
+      if (tErr) throw tErr;
+      teamId = newTeam.id;
+    }
+
+    // 3. Update students
+    const { error: updErr } = await supabaseAdmin
+      .from('students')
+      .update({ team_id: teamId })
+      .in('id', studentIds);
+    if (updErr) throw updErr;
+
     return res.json({ success: true });
   } catch (err: any) {
     console.error("Error in assign-team:", err);
@@ -1011,8 +1060,8 @@ app.delete('/api/students/:id', async (req: Request, res: Response): Promise<any
   }
 });
 
-// Send group notification emails to all members in a slot
-app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any> => {
+// Send team notification emails to all members in a slot
+app.post('/api/teams/notify', async (req: Request, res: Response): Promise<any> => {
   const { slotId } = req.body;
   if (!slotId) {
     return res.status(400).json({ success: false, error: 'slotId is required' });
@@ -1033,7 +1082,7 @@ app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any>
     // Get all students in this slot
     const { data: slotStudents, error: studentsError } = await supabaseAdmin
       .from('students')
-      .select('id, name, email, phone, team_name')
+      .select('id, name, email, phone, teams:teams!students_team_id_fkey(id, name, leader_id)')
       .eq('slot_id', slotId);
 
     if (studentsError) {
@@ -1044,12 +1093,13 @@ app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any>
       return res.status(400).json({ success: false, error: 'No students in this slot.' });
     }
 
-    // Group students by team_name
+    // Group students by team name
     const groups: Record<string, typeof slotStudents> = {};
     slotStudents.forEach((s: any) => {
-      if (s.team_name) {
-        if (!groups[s.team_name]) groups[s.team_name] = [];
-        groups[s.team_name].push(s);
+      if (s.teams && s.teams.name) {
+        const teamName = s.teams.name;
+        if (!groups[teamName]) groups[teamName] = [];
+        groups[teamName].push(s);
       }
     });
 
@@ -1062,16 +1112,33 @@ app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any>
 
     // Send email to each member with ONLY their group's details
     for (const [groupName, members] of Object.entries(groups)) {
-      const membersHtml = members.map((m: any) =>
-        `<tr>
-          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px;">${m.name}</td>
+      const teamsData: any = members[0]?.teams;
+      const leaderId = Array.isArray(teamsData) ? teamsData[0]?.leader_id : teamsData?.leader_id;
+      const leader = members.find((m: any) => m.id === leaderId);
+      const leaderName = leader ? leader.name : "To be assigned";
+
+      const membersHtml = members.map((m: any) => {
+        const isLeader = m.id === leaderId;
+        return `<tr>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: ${isLeader ? 'bold' : 'normal'};">
+            ${m.name} ${isLeader ? '<span style="color: #FF5A5F; font-size: 11px; margin-left: 6px; padding: 2px 6px; background: #FFF0F0; border-radius: 4px; border: 1px solid #FFE0E0;">👑 Team Leader</span>' : ''}
+          </td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.email}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.phone}</td>
-        </tr>`
-      ).join('');
+        </tr>`;
+      }).join('');
 
       for (const member of members) {
         try {
+          const isYouLeader = member.id === leaderId;
+          const leaderStatusHtml = isYouLeader
+            ? `<div style="background: #FFF9F9; border: 1px solid #FFEAEA; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 14px; color: #D9393E;">
+                ⭐ <strong>You are the designated Team Leader!</strong> You are responsible for submitting the video links for Round 2 and Round 3 in the student portal.
+              </div>`
+            : `<div style="background: #F9FBFC; border: 1px solid #EAF2F8; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 14px; color: #2E5A88;">
+                👤 <strong>Team Leader:</strong> <strong>${leaderName}</strong> has been appointed as your Team Leader. Only they can submit video links for your team.
+              </div>`;
+
           const mailOptions = {
             from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
             to: (member as any).email,
@@ -1082,6 +1149,8 @@ app.post('/api/groups/notify', async (req: Request, res: Response): Promise<any>
                 <p style="color: #333; font-size: 15px; margin-bottom: 20px;">
                   Hello <strong>${(member as any).name}</strong>, you have been assigned to a group for the MarkUp competition.
                 </p>
+
+                ${leaderStatusHtml}
 
                 <div style="background: #f8f8f8; border: 1px solid #eee; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
                   <div style="display: flex; justify-content: space-between;">
@@ -1235,6 +1304,23 @@ app.post('/api/students/:id/submit-score', async (req: Request, res: Response): 
   }
 
   try {
+    // 0. Check if a score has already been submitted for this student and round
+    const { data: existingScore, error: checkError } = await supabaseAdmin
+      .from('scores')
+      .select('id')
+      .eq('student_id', id)
+      .eq('round', round)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Error checking existing score:", checkError);
+      return res.status(500).json({ success: false, error: checkError.message });
+    }
+
+    if (existingScore) {
+      return res.status(400).json({ success: false, error: 'You have already submitted a score for this round.' });
+    }
+
     // 1. Insert into scores table
     const { error: scoreError } = await supabaseAdmin
       .from('scores')
@@ -1283,6 +1369,28 @@ app.post('/api/students/:id/submit-round', async (req: Request, res: Response): 
   }
 
   try {
+    // 1. Fetch the student's team_id and check if they are the leader
+    const { data: student, error: fetchErr } = await supabaseAdmin
+      .from('students')
+      .select('team_id, teams:teams!students_team_id_fkey(leader_id)')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !student) {
+      return res.status(404).json({ success: false, error: 'Student profile not found.' });
+    }
+
+    const { team_id, teams } = student as any;
+
+    if (!team_id) {
+      return res.status(400).json({ success: false, error: 'You are not assigned to any team. Contact your College Admin.' });
+    }
+
+    if (teams && teams.leader_id !== id) {
+      return res.status(403).json({ success: false, error: 'Only the Team Leader is authorized to submit for your team.' });
+    }
+
+    // 2. Prepare update payload
     const updateData: any = {};
     if (roundKey === 'round2') {
       updateData.round2_status = 'pending';
@@ -1294,10 +1402,11 @@ app.post('/api/students/:id/submit-round', async (req: Request, res: Response): 
       updateData.r3_note = note || '';
     }
 
+    // 3. Update all students in the same team to keep team submission in sync
     const { error } = await supabaseAdmin
       .from('students')
       .update(updateData)
-      .eq('id', id);
+      .eq('team_id', team_id);
 
     if (error) {
       console.error("POST /api/students/:id/submit-round error:", error);
@@ -1323,6 +1432,20 @@ app.post('/api/students/:id/jury-review', async (req: Request, res: Response): P
   }
 
   try {
+    // 1. Fetch student's team_id
+    const { data: student, error: fetchErr } = await supabaseAdmin
+      .from('students')
+      .select('team_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr || !student) {
+      return res.status(404).json({ success: false, error: 'Student profile not found.' });
+    }
+
+    const { team_id } = student;
+
+    // 2. Prepare update payload
     const updateData: any = {};
     if (roundKey === 'round2') {
       if (status) updateData.round2_status = status;
@@ -1332,10 +1455,15 @@ app.post('/api/students/:id/jury-review', async (req: Request, res: Response): P
       if (score !== undefined) updateData.r3_score = score;
     }
 
-    const { error } = await supabaseAdmin
-      .from('students')
-      .update(updateData)
-      .eq('id', id);
+    // 3. Update the whole team if the student is assigned to one, otherwise update individual
+    let query = supabaseAdmin.from('students').update(updateData);
+    if (team_id) {
+      query = query.eq('team_id', team_id);
+    } else {
+      query = query.eq('id', id);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.error("POST /api/students/:id/jury-review error:", error);

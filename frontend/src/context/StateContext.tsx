@@ -12,6 +12,12 @@ export interface RoundSubmission {
   juryScore: number | null;
 }
 
+export interface Team {
+  id: string;
+  name: string;
+  leaderId: string | null;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -20,7 +26,8 @@ export interface Student {
   collegeId: string;
   college: string;
   slotId: string | null;
-  teamName: string | null;
+  teamId: string | null;
+  team: Team | null;
   round1Status: "not-started" | "in-progress" | "submitted";
   r1Score: number | null;
   round2: RoundSubmission;
@@ -248,7 +255,8 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             collegeId: s.college_id,
             college: collegeAdminName || "Alliance University",
             slotId: s.slot_id,
-            teamName: s.team_name || s.teamName || null,
+            teamId: s.teamId || s.team_id || null,
+            team: s.team || null,
             round1Status: s.round1_status || "not-started",
             r1Score: s.r1_score,
             round2: { status: s.round2_status || "not-submitted", link: s.r2_link || "", note: s.r2_note || "", juryScore: s.r2_score || null }, 

@@ -94,7 +94,7 @@ export default function StudentLoginPage() {
           <div className="pill-row">
             <span className="pill">OTP secured</span>
             <span className="pill">Slot-based testing</span>
-            <span className="pill">40 students / slot</span>
+            <span className="pill">30 students / slot</span>
           </div>
         </div>
         <div className="login-form-col">
