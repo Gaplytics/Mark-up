@@ -42,8 +42,11 @@ export default function JuryLoginPage() {
           id: dbJudge.id,
           name: dbJudge.name,
           email: dbJudge.email,
-          dept: "Jury Panel",
+          dept: dbJudge.dept || "Jury Panel",
+          collegeId: dbJudge.college_id,
         };
+      } else {
+        selectedJudge.collegeId = dbJudge.college_id;
       }
 
       setCurrentJury(selectedJudge);

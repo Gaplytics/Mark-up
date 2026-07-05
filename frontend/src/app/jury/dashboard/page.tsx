@@ -4,6 +4,39 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useStateContext, StatusBadge, initials } from "@/context/StateContext";
 
+const StarRating = ({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) => {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ fontWeight: 600, fontSize: "13.5px", color: "var(--navy)" }}>{label} ({value > 0 ? `${value}/10` : "—"})</div>
+      <div style={{ display: "flex", gap: "6px" }}>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => {
+          const active = star <= value;
+          return (
+            <span
+              key={star}
+              onClick={() => onChange(star)}
+              style={{
+                cursor: "pointer",
+                fontSize: "22px",
+                color: active ? "#FFC107" : "#E2E8F0",
+                transition: "color 0.15s ease, transform 0.1s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "scale(1.2)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1.0)";
+              }}
+            >
+              ★
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export default function JuryDashboardPage() {
   const router = useRouter();
   const { students, setStudents, currentJury, setCurrentJury, addToast } = useStateContext();
@@ -11,6 +44,28 @@ export default function JuryDashboardPage() {
   const [juryTab, setJuryTab] = useState("overview");
   const [juryScores, setJuryScores] = useState<Record<string, number>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const [subScores, setSubScores] = useState<Record<string, { clarity?: number; creativity?: number; thought?: number }>>({});
+
+  useEffect(() => {
+    setCandidateIndex(0);
+  }, [juryTab]);
+
+  const getSubScore = (sid: string, criteria: "clarity" | "creativity" | "thought") => {
+    const roundKey = juryTab as "round2" | "round3";
+    const key = `${sid}-${roundKey}`;
+    const savedVal = subScores[key]?.[criteria];
+    if (savedVal !== undefined) return savedVal;
+    
+    // Default to the overall juryScore if it exists
+    const student = students.find(s => s.id === sid);
+    const existingOverall = student?.[roundKey]?.juryScore;
+    if (existingOverall !== null && existingOverall !== undefined) {
+      return Math.round(existingOverall);
+    }
+    return 0;
+  };
 
   useEffect(() => {
     if (!currentJury) {
@@ -21,6 +76,23 @@ export default function JuryDashboardPage() {
   if (!currentJury) return null;
 
   const handleJurySubmissionAction = (sid: string, roundKey: "round2" | "round3", status: "approved" | "rejected") => {
+    // Sync to Supabase
+    fetch(`http://localhost:3001/api/students/${sid}/jury-review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roundKey, status })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        addToast("Failed to sync submission status to server.", "error");
+      }
+    })
+    .catch(err => {
+      console.error("Error updating submission status:", err);
+      addToast("Failed to sync submission status to server.", "error");
+    });
+
     setStudents(students.map(s => {
       if (s.id === sid) {
         return {
@@ -40,6 +112,24 @@ export default function JuryDashboardPage() {
       addToast("Enter a score between 0 and 10.", "error", "Invalid score — ");
       return;
     }
+
+    // Sync to Supabase
+    fetch(`http://localhost:3001/api/students/${sid}/jury-review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roundKey, score: val })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        addToast("Failed to sync score to server.", "error");
+      }
+    })
+    .catch(err => {
+      console.error("Error updating jury score:", err);
+      addToast("Failed to sync score to server.", "error");
+    });
+
     setStudents(students.map(s => {
       if (s.id === sid) {
         return {
@@ -73,7 +163,7 @@ export default function JuryDashboardPage() {
             </button>
           </div>
           <div className="brand">
-            <div className="mark">M</div>
+            <img src="/logo-icon.png" alt="Logo" style={{ width: "30px", height: "30px", marginRight: "8px", objectFit: "contain" }} />
             <div>
               <div className="name">MarkUp</div>
               <div className="sub">Concept to Campaign</div>
@@ -81,17 +171,21 @@ export default function JuryDashboardPage() {
           </div>
           <div className="side-portal-tag">Jury Panel</div>
           <div className="side-nav">
-            <div className={`side-link ${juryTab === "overview" ? "active" : ""}`} onClick={() => setJuryTab("overview")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Overview</span>
+            <div className={`side-link ${juryTab === "overview" ? "active" : ""}`} onClick={() => setJuryTab("overview")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <span className="lbl">Overview</span>
             </div>
-            <div className={`side-link ${juryTab === "round1" ? "active" : ""}`} onClick={() => setJuryTab("round1")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round 1 Scores</span>
+            <div className={`side-link ${juryTab === "round1" ? "active" : ""}`} onClick={() => setJuryTab("round1")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span className="lbl">Round 1 Scores</span>
             </div>
-            <div className={`side-link ${juryTab === "round2" ? "active" : ""}`} onClick={() => setJuryTab("round2")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round 2 Reels</span>
+            <div className={`side-link ${juryTab === "round2" ? "active" : ""}`} onClick={() => setJuryTab("round2")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><path d="M23 7a2 2 0 0 0-2.45-1.45L16 7V5a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2l4.55 1.45A2 2 0 0 0 23 17V7z"></path></svg>
+              <span className="lbl">Round 2 Reels</span>
             </div>
-            <div className={`side-link ${juryTab === "round3" ? "active" : ""}`} onClick={() => setJuryTab("round3")} style={{ cursor: "pointer" }}>
-              <span className="dot"></span><span className="lbl">Round 3 Demo Day</span>
+            <div className={`side-link ${juryTab === "round3" ? "active" : ""}`} onClick={() => setJuryTab("round3")} style={{ cursor: "pointer", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10 }}><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+              <span className="lbl">Round 3 Demo Day</span>
             </div>
           </div>
           <div className="side-foot">
@@ -193,62 +287,172 @@ export default function JuryDashboardPage() {
             )}
 
             {/* --- ROUND 2 / 3 --- */}
-            {(juryTab === "round2" || juryTab === "round3") && (
-              <div className="grid" style={{ gap: 14 }}>
-                {students.map(s => {
-                  const roundKey = juryTab as "round2" | "round3";
-                  const r = s[roundKey];
-                  const label = roundKey === "round2" ? "90-Sec Reel" : "60-Sec Demo Day Film";
-                  return (
-                    <div key={s.id} className="card card-pad">
-                      <div className="row-between">
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 14.5 }}>{s.name}</div>
-                          <div style={{ fontSize: 12, color: "var(--slate-2)", marginTop: 2 }}>{label} · {s.college}</div>
-                        </div>
-                        <StatusBadge status={r.status} />
+            {(juryTab === "round2" || juryTab === "round3") && (() => {
+              const roundKey = juryTab as "round2" | "round3";
+              const label = roundKey === "round2" ? "90-Sec Reel" : "60-Sec Demo Day Film";
+              
+              // Filter to show only candidates who have submitted
+              const submittedCandidates = students.filter(s => s[roundKey]?.status !== "not-submitted");
+              
+              if (submittedCandidates.length === 0) {
+                return (
+                  <div className="card card-pad" style={{ textAlign: "center", padding: "40px" }}>
+                    <div style={{ fontSize: "36px", marginBottom: "12px" }}>📂</div>
+                    <div style={{ fontSize: "16px", fontWeight: "600", color: "var(--navy)" }}>No submissions yet</div>
+                    <p style={{ color: "var(--slate-2)", fontSize: "13px", marginTop: "4px" }}>Students will appear here once they upload their video link.</p>
+                  </div>
+                );
+              }
+              
+              // Safe index clamping
+              const safeIndex = candidateIndex >= submittedCandidates.length ? 0 : candidateIndex;
+              const s = submittedCandidates[safeIndex];
+              const r = s[roundKey];
+              
+              // Calculate real-time average
+              const clarity = getSubScore(s.id, "clarity");
+              const creativity = getSubScore(s.id, "creativity");
+              const thought = getSubScore(s.id, "thought");
+              
+              const hasAllScores = clarity > 0 && creativity > 0 && thought > 0;
+              const averageScore = hasAllScores ? parseFloat(((clarity + creativity + thought) / 3).toFixed(1)) : 0;
+              
+              const handlePrev = () => {
+                if (safeIndex > 0) setCandidateIndex(safeIndex - 1);
+              };
+              
+              const handleNext = () => {
+                if (safeIndex < submittedCandidates.length - 1) setCandidateIndex(safeIndex + 1);
+              };
+              
+              const saveAndNext = async () => {
+                if (!hasAllScores) {
+                  addToast("Please grade all three criteria (Clarity, Creativity, Thought) before saving.", "error");
+                  return;
+                }
+                
+                try {
+                  const res = await fetch(`http://localhost:3001/api/students/${s.id}/jury-review`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ roundKey, score: averageScore })
+                  });
+                  const data = await res.json();
+                  if (!data.success) throw new Error(data.error);
+                  
+                  // Update local state
+                  setStudents(students.map(item => {
+                    if (item.id === s.id) {
+                      return {
+                        ...item,
+                        [roundKey]: { ...item[roundKey], juryScore: averageScore }
+                      };
+                    }
+                    return item;
+                  }));
+                  
+                  addToast(`Average score of ${averageScore} saved for ${s.name}!`, "success");
+                  
+                  // Automatically proceed to next candidate if available
+                  if (safeIndex < submittedCandidates.length - 1) {
+                    setCandidateIndex(safeIndex + 1);
+                  } else {
+                     addToast("You have reached the end of the submissions list.");
+                  }
+                } catch (err) {
+                  console.error(err);
+                  addToast("Failed to save score.", "error");
+                }
+              };
+              
+              return (
+                <div style={{ maxWidth: "600px", margin: "0 auto" }}>
+                  {/* Navigation controls at top */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", background: "#fff", padding: "12px 16px", borderRadius: "10px", border: "1px solid var(--line)" }}>
+                    <button className="btn btn-ghost btn-sm" onClick={handlePrev} disabled={safeIndex === 0} style={{ padding: "6px 12px", border: "1px solid var(--line)", borderRadius: "6px" }}>
+                      ← Prev Candidate
+                    </button>
+                    <span style={{ fontSize: "13.5px", fontWeight: "600", color: "var(--navy)" }}>
+                      Candidate {safeIndex + 1} of {submittedCandidates.length}
+                    </span>
+                    <button className="btn btn-ghost btn-sm" onClick={handleNext} disabled={safeIndex === submittedCandidates.length - 1} style={{ padding: "6px 12px", border: "1px solid var(--line)", borderRadius: "6px" }}>
+                      Next Candidate →
+                    </button>
+                  </div>
+                  
+                  <div className="card card-pad">
+                    <div className="row-between" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "14px", marginBottom: "14px" }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "18px", color: "var(--navy)" }}>{s.name}</div>
+                        <div style={{ fontSize: "12.5px", color: "var(--slate-2)", marginTop: 2 }}>{label} · {s.college}</div>
                       </div>
-
-                      {r.status === "not-submitted" ? (
-                        <p style={{ fontSize: 12.5, color: "var(--slate-2)", marginTop: 14 }}>Waiting for this student to submit.</p>
-                      ) : (
-                        <>
-                          <div style={{ marginTop: 14, padding: 12, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA" }}>
-                            <div style={{ fontSize: 12.5 }}>
-                              🔗 <a href="#" onClick={(e) => e.preventDefault()} style={{ color: "var(--navy-2)", fontWeight: 600 }}>{r.link || "submission-link.mp4"}</a>
-                            </div>
-                            {r.note && (
-                              <div style={{ fontSize: 12, color: "var(--slate-2)", marginTop: 6 }}>Note: {r.note}</div>
-                            )}
-                          </div>
-                          <div className="form-row" style={{ marginTop: 14 }}>
-                            <div className="form-group" style={{ marginBottom: 0 }}>
-                              <label>Score (out of 10)</label>
-                              <input
-                                className="input"
-                                type="number"
-                                min="0"
-                                max="10"
-                                value={juryScores[`${s.id}-${roundKey}`] ?? r.juryScore ?? ""}
-                                onChange={(e) => setJuryScores({ ...juryScores, [`${s.id}-${roundKey}`]: parseFloat(e.target.value) })}
-                                placeholder="e.g. 8"
-                              />
-                            </div>
-                            <div style={{ display: "flex", alignItems: "end", gap: 8 }}>
-                              <button className="btn btn-primary btn-sm" onClick={() => handleJuryScoreSave(s.id, roundKey)}>Save score</button>
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                            <button className="btn btn-outline-coral btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "approved")}>✓ Approve submission</button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "rejected")}>Request changes</button>
-                          </div>
-                        </>
+                      <StatusBadge status={r.status} />
+                    </div>
+                    
+                    <div style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 10, background: "#FCFBFA", marginBottom: "20px" }}>
+                      <div style={{ fontSize: "13.5px", fontWeight: "600", color: "var(--navy)", marginBottom: "4px" }}>Submission Video Link</div>
+                      <div style={{ fontSize: "13px" }}>
+                        🔗 <a href={r.link} target="_blank" rel="noreferrer" style={{ color: "var(--navy-2)", fontWeight: 600, wordBreak: "break-all" }}>{r.link || "No link provided"}</a>
+                      </div>
+                      {r.note && (
+                        <div style={{ fontSize: "12.5px", color: "var(--slate-2)", marginTop: "8px", borderTop: "1px solid #f0f0f0", paddingTop: "8px" }}>
+                          <b>Note to Jury:</b> {r.note}
+                        </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    
+                    {/* Star scoring criteria */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px", borderBottom: "1px solid var(--line)", paddingBottom: "20px", marginBottom: "20px" }}>
+                      <StarRating 
+                        label="Clarity" 
+                        value={clarity} 
+                        onChange={(val) => setSubScores(prev => ({
+                          ...prev,
+                          [`${s.id}-${roundKey}`]: { ...prev[`${s.id}-${roundKey}`], clarity: val }
+                        }))} 
+                      />
+                      
+                      <StarRating 
+                        label="Creativity" 
+                        value={creativity} 
+                        onChange={(val) => setSubScores(prev => ({
+                          ...prev,
+                          [`${s.id}-${roundKey}`]: { ...prev[`${s.id}-${roundKey}`], creativity: val }
+                        }))} 
+                      />
+                      
+                      <StarRating 
+                        label="Thought" 
+                        value={thought} 
+                        onChange={(val) => setSubScores(prev => ({
+                          ...prev,
+                          [`${s.id}-${roundKey}`]: { ...prev[`${s.id}-${roundKey}`], thought: val }
+                        }))} 
+                      />
+                    </div>
+                    
+                    {/* Real-time average display */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", background: "#f8f9fc", padding: "14px", borderRadius: "8px" }}>
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy)" }}>Average Score</div>
+                        <div style={{ fontSize: "12px", color: "var(--slate-2)" }}>Calculated automatically from criteria above</div>
+                      </div>
+                      <div style={{ fontSize: "24px", fontWeight: "800", color: averageScore > 0 ? "var(--coral)" : "#a0aec0" }}>
+                        {averageScore > 0 ? `${averageScore} / 10` : "—"}
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                      <button className="btn btn-outline-coral btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "approved")}>✓ Approve</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "rejected")}>Request Changes</button>
+                      <button className="btn btn-coral btn-sm" onClick={saveAndNext} disabled={!hasAllScores}>
+                        Save & Next →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

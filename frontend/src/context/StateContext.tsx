@@ -32,6 +32,7 @@ export interface Judge {
   name: string;
   email: string;
   dept: string;
+  collegeId?: string;
 }
 
 export interface Slot {
@@ -230,10 +231,12 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!collegeAdminId) return;
+    const targetCollegeId = collegeAdminId || currentJury?.collegeId;
+    if (!targetCollegeId) return;
+
     const fetchStudents = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/students?college_id=${encodeURIComponent(collegeAdminId)}`);
+        const res = await fetch(`http://localhost:3001/api/students?college_id=${encodeURIComponent(targetCollegeId)}`);
         const json = await res.json();
         if (json.success) {
           // Map DB snake_case fields back to camelCase
@@ -243,7 +246,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             email: s.email || "",
             phone: s.phone,
             collegeId: s.college_id,
-            college: collegeAdminName,
+            college: collegeAdminName || "Alliance University",
             slotId: s.slot_id,
             teamName: s.team_name || s.teamName || null,
             round1Status: s.round1_status || "not-started",
@@ -258,7 +261,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
       }
     };
     fetchStudents();
-  }, [collegeAdminId, collegeAdminName]);
+  }, [collegeAdminId, collegeAdminName, currentJury?.collegeId]);
 
   const slotInfo = (slotId: string | null) => {
     const slot = slots.find(s => s.id === slotId);

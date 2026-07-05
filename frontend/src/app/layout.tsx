@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "MarkUp — Concept to Campaign | Platform",
   description: "Contest Operations Platform",
+  icons: {
+    icon: "/logo-icon.png",
+  },
 };
 
 export default function RootLayout({

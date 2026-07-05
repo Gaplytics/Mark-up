@@ -1271,6 +1271,84 @@ app.post('/api/students/:id/submit-score', async (req: Request, res: Response): 
   }
 });
 
+// =====================================
+// ROUND 2 / 3 SUBMISSIONS
+// =====================================
+app.post('/api/students/:id/submit-round', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { roundKey, link, note } = req.body;
+
+  if (!roundKey || !['round2', 'round3'].includes(roundKey) || link === undefined) {
+    return res.status(400).json({ success: false, error: 'Missing or invalid fields' });
+  }
+
+  try {
+    const updateData: any = {};
+    if (roundKey === 'round2') {
+      updateData.round2_status = 'pending';
+      updateData.r2_link = link;
+      updateData.r2_note = note || '';
+    } else {
+      updateData.round3_status = 'pending';
+      updateData.r3_link = link;
+      updateData.r3_note = note || '';
+    }
+
+    const { error } = await supabaseAdmin
+      .from('students')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) {
+      console.error("POST /api/students/:id/submit-round error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/students/:id/submit-round:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// =====================================
+// JURY REVIEWS & SCORING
+// =====================================
+app.post('/api/students/:id/jury-review', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { roundKey, status, score } = req.body;
+
+  if (!roundKey || !['round2', 'round3'].includes(roundKey)) {
+    return res.status(400).json({ success: false, error: 'Missing or invalid roundKey' });
+  }
+
+  try {
+    const updateData: any = {};
+    if (roundKey === 'round2') {
+      if (status) updateData.round2_status = status;
+      if (score !== undefined) updateData.r2_score = score;
+    } else {
+      if (status) updateData.round3_status = status;
+      if (score !== undefined) updateData.r3_score = score;
+    }
+
+    const { error } = await supabaseAdmin
+      .from('students')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) {
+      console.error("POST /api/students/:id/jury-review error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("Unexpected error in POST /api/students/:id/jury-review:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
 });
