@@ -447,7 +447,7 @@ export default function StudentDashboardPage() {
 
     setIsLoadingQuestions(true);
     try {
-      const res = await fetch("http://localhost:3001/api/questions");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/questions`);
       const json = await res.json();
       if (!json.success) throw new Error("Failed to load questions");
       if (!json.data || json.data.length === 0) {
@@ -517,7 +517,7 @@ export default function StudentDashboardPage() {
     const note = proctoringNote || (isDisqualified ? "Disqualified due to proctoring violations" : null);
 
     // Send score to backend to insert into Supabase scores table
-    fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-score`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${currentStudent.studentId}/submit-score`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -670,7 +670,7 @@ export default function StudentDashboardPage() {
     if (!currentStudent) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-round`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${currentStudent.studentId}/submit-round`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roundKey, link, note })

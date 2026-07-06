@@ -146,7 +146,7 @@ export default function JuryDashboardPage() {
 
   const handleJurySubmissionAction = (sid: string, roundKey: "round2" | "round3", status: "approved" | "rejected") => {
     // Sync to Supabase
-    fetch(`http://localhost:3001/api/students/${sid}/jury-review`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${sid}/jury-review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roundKey, status })
@@ -190,7 +190,7 @@ export default function JuryDashboardPage() {
     }
 
     // Sync to Supabase
-    fetch(`http://localhost:3001/api/students/${sid}/jury-review`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${sid}/jury-review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roundKey, score: val })
@@ -437,7 +437,7 @@ export default function JuryDashboardPage() {
                 }
                 
                 try {
-                  const res = await fetch(`http://localhost:3001/api/students/${s.id}/jury-review`, {
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${s.id}/jury-review`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ roundKey, score: averageScore, status: "approved" })

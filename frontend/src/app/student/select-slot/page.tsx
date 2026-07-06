@@ -33,7 +33,7 @@ function SelectSlotContent() {
 
     const fetchStudent = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/students/${studentId}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${studentId}`);
         const data = await res.json();
         if (data.success) {
           setStudent(data.student);
@@ -53,7 +53,7 @@ function SelectSlotContent() {
 
     const fetchSlots = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/slots");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/slots`);
         const data = await res.json();
         if (data.success) {
           const parseTime = (label: string) => {
@@ -88,7 +88,7 @@ function SelectSlotContent() {
     setError("");
 
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${studentId}/select-slot`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${studentId}/select-slot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slotId: selectedSlot }),

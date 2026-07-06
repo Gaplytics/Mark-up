@@ -40,7 +40,7 @@ export default function SuperadminDashboardPage() {
   const loadColleges = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3001/api/colleges");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/colleges`);
       const json = await res.json();
       if (json.success) {
         setColleges(json.data);
@@ -72,7 +72,7 @@ export default function SuperadminDashboardPage() {
     };
 
     try {
-      const res = await fetch("http://localhost:3001/api/colleges", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/colleges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newCollege),

@@ -23,7 +23,7 @@ export default function StudentLoginPage() {
     
     setIsProcessing(true);
     try {
-      const res = await fetch("http://localhost:3001/api/student/send-otp", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/student/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail.trim() })
@@ -51,7 +51,7 @@ export default function StudentLoginPage() {
     
     setIsProcessing(true);
     try {
-      const res = await fetch("http://localhost:3001/api/student/verify-otp", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/student/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail.trim(), code: entered })
