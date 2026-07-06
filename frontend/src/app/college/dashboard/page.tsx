@@ -254,14 +254,31 @@ export default function CollegeDashboardPage() {
         const seenEmails = new Set(students.map(s => s.email.toLowerCase()));
 
         data.forEach((row: any) => {
-          const name = row['Name'] || row['name'] || row['Full Name'];
-          const email = row['Email'] || row['email'] || row['Email Address'];
-          const phone = row['Phone'] || row['phone'] || row['Mobile'] || row['Mobile Number'];
+          // Normalize row keys: lowercase and strip spaces/underscores/hyphens
+          const normalizedRow: Record<string, any> = {};
+          Object.keys(row).forEach(k => {
+            const normalizedKey = k.toLowerCase().replace(/[\s_-]/g, "");
+            normalizedRow[normalizedKey] = row[k];
+          });
+
+          const name = normalizedRow['name'] || normalizedRow['fullname'] || normalizedRow['studentname'];
+          const email = normalizedRow['email'] || normalizedRow['emailaddress'] || normalizedRow['mail'] || normalizedRow['mailid'];
+          const phone = normalizedRow['phone'] || normalizedRow['phonenumber'] || normalizedRow['phoneno'] || normalizedRow['mobile'] || normalizedRow['mobilenumber'] || normalizedRow['contact'] || normalizedRow['contactnumber'];
 
           if (name && phone) {
             const emailStr = email ? String(email).trim() : "";
-            const phoneStr = String(phone).trim();
             const emailLower = emailStr.toLowerCase();
+            
+            // Clean phone number: remove all non-digits (spaces, dashes, country code signs)
+            let phoneStr = String(phone).replace(/\D/g, "");
+            // Strip leading country code 91 if it results in a 10-digit number
+            if (phoneStr.length === 12 && phoneStr.startsWith("91")) {
+              phoneStr = phoneStr.slice(2);
+            }
+            // Strip leading 0 if it results in a 10-digit number
+            if (phoneStr.length === 11 && phoneStr.startsWith("0")) {
+              phoneStr = phoneStr.slice(1);
+            }
 
             if (emailStr.includes('@') && /^\d{10}$/.test(phoneStr)) {
               if (seenEmails.has(emailLower)) {
@@ -287,6 +304,8 @@ export default function CollegeDashboardPage() {
             } else {
               skippedCount++;
             }
+          } else {
+            skippedCount++;
           }
         });
 
@@ -337,6 +356,12 @@ export default function CollegeDashboardPage() {
           let message = "No valid new students found.";
           if (duplicateCount > 0) message += ` (${duplicateCount} duplicates skipped.)`;
           if (skippedCount > 0) message += ` (${skippedCount} invalid rows skipped.)`;
+          const columnsFound = data.length > 0 ? Object.keys(data[0] as any) : [];
+          if (columnsFound.length > 0) {
+            message += ` Detected columns: ${columnsFound.join(", ")}`;
+          } else {
+            message += " The file appears to be empty or unparseable.";
+          }
           addToast(message, "error", "Parse failed");
         }
       } catch (err) {
