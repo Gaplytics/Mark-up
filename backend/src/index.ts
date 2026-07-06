@@ -157,7 +157,7 @@ app.get('/api/judges', async (req: Request, res: Response): Promise<any> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('judges')
-      .select('id, name, email, dept, college_id, colleges(name), created_at')
+      .select('id, name, email, dept, college_id, slot_id, colleges(name), created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -171,6 +171,9 @@ app.get('/api/judges', async (req: Request, res: Response): Promise<any> => {
       name: j.name,
       email: j.email,
       dept: j.dept,
+      college_id: j.college_id,
+      slot_id: j.slot_id || null,
+      slotId: j.slot_id || null,
       college_name: j.colleges ? j.colleges.name : 'Unknown College',
       created_at: j.created_at
     }));
@@ -203,7 +206,7 @@ app.delete('/api/judges/:id', async (req: Request, res: Response): Promise<any> 
 
 // Create a judge & send invite email
 app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
-  const { name, email, dept, college_id } = req.body;
+  const { name, email, dept, college_id, slot_id } = req.body;
   if (!name || !email || !dept || !college_id) {
     return res.status(400).json({ success: false, error: 'Missing fields' });
   }
@@ -276,7 +279,7 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
     // 2. Upsert profile into judges table using college_id foreign key
     const { error: dbError } = await supabaseAdmin
       .from('judges')
-      .upsert([{ id: userId, name, email, dept, college_id }], { onConflict: 'id' });
+      .upsert([{ id: userId, name, email, dept, college_id, slot_id: slot_id || null }], { onConflict: 'id' });
 
     if (dbError) {
       console.error("DB upsert error for judge:", dbError);
@@ -762,7 +765,7 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('students')
-      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id)')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id), scores(round, score, proctoring_flagged, proctoring_note)')
       .eq('college_id', college_id)
       .order('created_at', { ascending: true });
 
@@ -770,14 +773,19 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
       console.error("GET /api/students error:", error);
       return res.status(500).json({ success: false, error: error.message });
     }
-    const withTeams = (data || []).map((s: any) => ({
-      ...s,
-      team: s.teams ? {
-        id: s.teams.id,
-        name: s.teams.name,
-        leaderId: s.teams.leader_id
-      } : null
-    }));
+    const withTeams = (data || []).map((s: any) => {
+      const r1ScoreObj = Array.isArray(s.scores) ? s.scores.find((sc: any) => sc.round === 'round1') : null;
+      return {
+        ...s,
+        proctoring_flagged: r1ScoreObj ? Boolean(r1ScoreObj.proctoring_flagged) : false,
+        proctoring_note: r1ScoreObj ? r1ScoreObj.proctoring_note : null,
+        team: s.teams ? {
+          id: s.teams.id,
+          name: s.teams.name,
+          leaderId: s.teams.leader_id
+        } : null
+      };
+    });
     return res.json({ success: true, data: withTeams });
   } catch (err: any) {
     console.error("Unexpected error in GET /api/students:", err);

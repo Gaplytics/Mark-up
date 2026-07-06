@@ -25,19 +25,35 @@ const renderVideoEmbed = (link: string) => {
   }
   
   // Google Drive embed
-  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const driveMatch = link.match(/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?.*id=)([a-zA-Z0-9_-]+)/i);
   if (driveMatch && driveMatch[1]) {
     return (
       <iframe 
         src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
         width="100%" 
-        height="315" 
+        height="360" 
         allow="autoplay"
         style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
       ></iframe>
     );
   }
   
+  // Instagram Reels/Posts embed
+  const igMatch = link.match(/instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)/i);
+  if (igMatch && igMatch[1]) {
+    return (
+      <iframe
+        src={`https://www.instagram.com/reel/${igMatch[1]}/embed`}
+        width="100%"
+        height="450"
+        frameBorder="0"
+        scrolling="no"
+        allowTransparency
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+
   // Direct MP4
   if (link.toLowerCase().endsWith('.mp4')) {
     return (
@@ -125,7 +141,7 @@ export default function StudentDashboardPage() {
       if (localWarningCount > 3) {
         setIsDisqualified(true);
         addToast(`Disqualified: ${reason}. Exceeded 3 warnings.`, "error", "Disqualified — ");
-        handleSubmitTest(false, 0);
+        handleSubmitTest(false, 0, true, `Disqualified: Exceeded 3 warnings (${reason})`);
       } else {
         addToast(`Warning ${localWarningCount}/3: ${reason}! Violation recorded.`, "error", "Proctoring Warning — ");
         
@@ -365,6 +381,49 @@ export default function StudentDashboardPage() {
 
   if (!activeStudent) return null;
 
+  const checkIsSlotActive = (label: string | undefined): { isActive: boolean; reason?: string } => {
+    if (!label) return { isActive: false, reason: "No slot assigned" };
+    
+    try {
+      const cleanLabel = label.replace(/[\u2012\u2013\u2014-]/g, "-");
+      const parts = cleanLabel.split("-");
+      if (parts.length !== 2) return { isActive: false, reason: "Invalid slot format" };
+
+      const parseTimeToMinutes = (timeStr: string) => {
+        const match = timeStr.trim().match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return null;
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const isPM = match[3].toUpperCase() === "PM";
+        if (h === 12 && !isPM) h = 0;
+        if (h !== 12 && isPM) h += 12;
+        return h * 60 + m;
+      };
+
+      const startMinutes = parseTimeToMinutes(parts[0]);
+      const endMinutes = parseTimeToMinutes(parts[1]);
+
+      if (startMinutes === null || endMinutes === null) {
+        return { isActive: false, reason: "Unable to parse slot time" };
+      }
+
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      if (currentMinutes < startMinutes) {
+        return { isActive: false, reason: "Before slot time" };
+      }
+      if (currentMinutes > endMinutes) {
+        return { isActive: false, reason: "After slot time" };
+      }
+
+      return { isActive: true };
+    } catch (err) {
+      console.error("Error checking slot activity:", err);
+      return { isActive: false, reason: "Error parsing slot" };
+    }
+  };
+
   const selectRandomQuestion = (diff: string, excluded: Set<string>) => {
     const pool = dbQuestions.filter(q => 
       q.Difficulty?.toLowerCase() === diff.toLowerCase() && !excluded.has(q.Question)
@@ -376,6 +435,13 @@ export default function StudentDashboardPage() {
   async function handleStartTest() {
     if (!activeStudent || activeStudent.round1Status === "submitted" || activeStudent.r1Score !== null) {
       addToast("You have already submitted this test. You cannot retake it.", "error", "Access denied — ");
+      return;
+    }
+
+    const slotLabel = slotInfo(activeStudent.slotId).slot?.label;
+    const slotStatus = checkIsSlotActive(slotLabel);
+    if (!slotStatus.isActive) {
+      addToast(`Access Denied: You can only take the test during your slot (${slotLabel || "Unassigned"}).`, "error", "Access denied — ");
       return;
     }
 
@@ -788,67 +854,99 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (
-                  <div className="card card-pad" style={{ maxWidth: "600px", margin: "0 auto" }}>
-                    <div className="section-title" style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>Exam Instructions & Rules</div>
-                    <div className="section-desc" style={{ marginBottom: "20px" }}>Please read the following instructions carefully before starting the exam.</div>
-                    
-                    <div style={{ 
-                      padding: "16px", 
-                      border: "1px solid var(--line)", 
-                      borderRadius: "10px", 
-                      background: "#FCFBFA", 
-                      marginBottom: "20px",
-                      textAlign: "left"
-                    }}>
-                      <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", color: "var(--slate-1)" }}>
-                        🕒 Your slot: <b>{slotInfo(activeStudent.slotId).slot?.label}</b>
-                      </div>
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (() => {
+                  const slotLabel = slotInfo(activeStudent.slotId).slot?.label;
+                  const slotStatus = checkIsSlotActive(slotLabel);
+
+                  return (
+                    <div className="card card-pad" style={{ maxWidth: "600px", margin: "0 auto" }}>
+                      <div className="section-title" style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>Exam Instructions & Rules</div>
+                      <div className="section-desc" style={{ marginBottom: "20px" }}>Please read the following instructions carefully before starting the exam.</div>
                       
-                      <ul style={{ 
-                        fontSize: "13px", 
-                        lineHeight: "1.6", 
-                        color: "var(--slate-1)", 
-                        paddingLeft: "20px",
-                        margin: 0
+                      {!slotStatus.isActive && (
+                        <div style={{ 
+                          padding: "14px 18px", 
+                          background: "#FEF2F2", 
+                          border: "1px solid #FCA5A5", 
+                          borderRadius: "10px", 
+                          color: "#991B1B", 
+                          fontSize: "13.5px", 
+                          fontWeight: "500",
+                          marginBottom: "20px",
+                          textAlign: "left",
+                          lineHeight: "1.5"
+                        }}>
+                          ⚠️ <b>Slot Inactive:</b> You can only take this test during your assigned slot time (<b>{slotLabel || "Unassigned"}</b>). 
+                          {slotStatus.reason === "Before slot time" ? " Your slot has not started yet." : " Your slot session has already ended."}
+                        </div>
+                      )}
+
+                      <div style={{ 
+                        padding: "16px", 
+                        border: "1px solid var(--line)", 
+                        borderRadius: "10px", 
+                        background: "#FCFBFA", 
+                        marginBottom: "20px",
+                        textAlign: "left",
+                        opacity: slotStatus.isActive ? 1 : 0.6
                       }}>
-                        <li style={{ marginBottom: "8px" }}>📝 <b>Format:</b> There will be exactly <b>30 questions</b>.</li>
-                        <li style={{ marginBottom: "8px" }}>⏱️ <b>Duration:</b> You have <b>40 minutes</b> to complete the test (strict auto-submission).</li>
-                        <li style={{ marginBottom: "8px" }}>🚫 <b>No Backtracking:</b> After answering a question, you <b>cannot go back</b> to review or change it.</li>
-                        <li style={{ marginBottom: "8px" }}>✅ <b>Marking:</b> There is <b>no negative marking</b>.</li>
-                        <li style={{ marginBottom: "8px" }}>⚠️ <b>Proctoring:</b> Your Camera and Microphone must be turned <b>ON</b>. The system monitors your hardware status continuously.</li>
-                        <li style={{ marginBottom: "8px" }}>🚨 <b>Disqualification:</b> You will be automatically disqualified if you attempt to cheat (e.g. switching tabs, minimizing browser, or having other people in the room).</li>
-                      </ul>
+                        <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", color: "var(--slate-1)" }}>
+                          🕒 Your slot: <b>{slotLabel || "Unassigned"}</b>
+                        </div>
+                        
+                        <ul style={{ 
+                          fontSize: "13px", 
+                          lineHeight: "1.6", 
+                          color: "var(--slate-1)", 
+                          paddingLeft: "20px",
+                          margin: 0
+                        }}>
+                          <li style={{ marginBottom: "8px" }}>📝 <b>Format:</b> There will be exactly <b>30 questions</b>.</li>
+                          <li style={{ marginBottom: "8px" }}>⏱️ <b>Duration:</b> You have <b>40 minutes</b> to complete the test (strict auto-submission).</li>
+                          <li style={{ marginBottom: "8px" }}>🚫 <b>No Backtracking:</b> After answering a question, you <b>cannot go back</b> to review or change it.</li>
+                          <li style={{ marginBottom: "8px" }}>✅ <b>Marking:</b> There is <b>no negative marking</b>.</li>
+                          <li style={{ marginBottom: "8px" }}>⚠️ <b>Proctoring:</b> Your Camera and Microphone must be turned <b>ON</b>. The system monitors your hardware status continuously.</li>
+                          <li style={{ marginBottom: "8px" }}>🚨 <b>Disqualification:</b> You will be automatically disqualified if you attempt to cheat (e.g. switching tabs, minimizing browser, or having other people in the room).</li>
+                        </ul>
+                      </div>
+
+                      <label style={{ 
+                        display: "flex", 
+                        alignItems: "flex-start", 
+                        gap: "10px", 
+                        fontSize: "13px", 
+                        color: "var(--slate-1)",
+                        cursor: slotStatus.isActive ? "pointer" : "not-allowed",
+                        marginBottom: "22px",
+                        textAlign: "left",
+                        opacity: slotStatus.isActive ? 1 : 0.5
+                      }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isAcknowledged} 
+                          onChange={(e) => {
+                            if (slotStatus.isActive) setIsAcknowledged(e.target.checked);
+                          }} 
+                          style={{ marginTop: "3px" }}
+                          disabled={!slotStatus.isActive}
+                        />
+                        <span>I acknowledge that I have read the rules and agree to keep my camera/microphone active during the exam. I understand that violating these rules will lead to immediate disqualification.</span>
+                      </label>
+
+                      <button 
+                        className="btn btn-coral btn-block" 
+                        onClick={handleStartTest} 
+                        disabled={isLoadingQuestions || !isAcknowledged || !slotStatus.isActive}
+                        style={{
+                          opacity: (isLoadingQuestions || !isAcknowledged || !slotStatus.isActive) ? 0.5 : 1,
+                          cursor: (isLoadingQuestions || !isAcknowledged || !slotStatus.isActive) ? "not-allowed" : "pointer"
+                        }}
+                      >
+                        {isLoadingQuestions ? "Preparing exam & requesting media access..." : "Start test"}
+                      </button>
                     </div>
-
-                    <label style={{ 
-                      display: "flex", 
-                      alignItems: "flex-start", 
-                      gap: "10px", 
-                      fontSize: "13px", 
-                      color: "var(--slate-1)",
-                      cursor: "pointer",
-                      marginBottom: "22px",
-                      textAlign: "left"
-                    }}>
-                      <input 
-                        type="checkbox" 
-                        checked={isAcknowledged} 
-                        onChange={(e) => setIsAcknowledged(e.target.checked)} 
-                        style={{ marginTop: "3px" }}
-                      />
-                      <span>I acknowledge that I have read the rules and agree to keep my camera/microphone active during the exam. I understand that violating these rules will lead to immediate disqualification.</span>
-                    </label>
-
-                    <button 
-                      className="btn btn-coral btn-block" 
-                      onClick={handleStartTest} 
-                      disabled={isLoadingQuestions || !isAcknowledged}
-                    >
-                      {isLoadingQuestions ? "Preparing exam & requesting media access..." : "Start test"}
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && !examFinished && !isDisqualified && (
                   <div className="card card-pad" id="exam-container">

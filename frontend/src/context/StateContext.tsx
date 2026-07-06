@@ -30,6 +30,8 @@ export interface Student {
   team: Team | null;
   round1Status: "not-started" | "in-progress" | "submitted";
   r1Score: number | null;
+  proctoringFlagged?: boolean;
+  proctoringNote?: string | null;
   round2: RoundSubmission;
   round3: RoundSubmission;
 }
@@ -40,6 +42,8 @@ export interface Judge {
   email: string;
   dept: string;
   collegeId?: string;
+  slotId?: string | null;
+  slot_id?: string | null;
 }
 
 export interface Slot {
@@ -259,6 +263,8 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             team: s.team || null,
             round1Status: s.round1_status || "not-started",
             r1Score: s.r1_score,
+            proctoringFlagged: Boolean(s.proctoring_flagged),
+            proctoringNote: s.proctoring_note || null,
             round2: { status: s.round2_status || "not-submitted", link: s.r2_link || "", note: s.r2_note || "", juryScore: s.r2_score || null }, 
             round3: { status: s.round3_status || "not-submitted", link: s.r3_link || "", note: s.r3_note || "", juryScore: s.r3_score || null },
           }));
