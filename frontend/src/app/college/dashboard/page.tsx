@@ -7,6 +7,59 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const renderVideoEmbed = (link: string) => {
+  if (!link) return null;
+  
+  // YouTube embed
+  const ytMatch = link.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?.*v=))([\w-]{11})/i);
+  if (ytMatch && ytMatch[1]) {
+    return (
+      <iframe 
+        width="100%" 
+        height="300" 
+        src={`https://www.youtube.com/embed/${ytMatch[1]}`} 
+        title="YouTube video player" 
+        frameBorder="0" 
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+        allowFullScreen 
+        style={{ borderRadius: "8px", marginTop: "12px" }}
+      ></iframe>
+    );
+  }
+  
+  // Google Drive embed
+  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch && driveMatch[1]) {
+    return (
+      <iframe 
+        src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
+        width="100%" 
+        height="300" 
+        allow="autoplay"
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+  
+  // Direct MP4
+  if (link.toLowerCase().endsWith('.mp4')) {
+    return (
+      <video width="100%" height="300" controls style={{ borderRadius: "8px", marginTop: "12px", background: "#000" }}>
+        <source src={link} type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+    );
+  }
+  
+  // Fallback for unknown links
+  return (
+    <div style={{ marginTop: "12px", padding: "16px", background: "#f8f9fc", borderRadius: "8px", textAlign: "center", border: "1px dashed var(--line)" }}>
+      <p style={{ fontSize: "13px", color: "var(--slate-2)", marginBottom: "8px" }}>This link format cannot be embedded directly.</p>
+      <a href={link} target="_blank" rel="noreferrer" className="btn btn-outline-coral btn-sm" style={{ textDecoration: "none" }}>Open Video ↗</a>
+    </div>
+  );
+};
+
 export default function CollegeDashboardPage() {
   const router = useRouter();
   const {
@@ -36,6 +89,8 @@ export default function CollegeDashboardPage() {
   const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState(false);
   const [showUnassignedModal, setShowUnassignedModal] = useState(false);
   const [showSlotModal, setShowSlotModal] = useState<string | null>(null);
+  const [showR2SubmissionsModal, setShowR2SubmissionsModal] = useState(false);
+  const [activePreviewReel, setActivePreviewReel] = useState<string | null>(null);
 
   const handleAddStudent = async () => {
     if (!newStudent.name.trim() || !newStudent.email.trim() || !newStudent.phone.trim()) {
@@ -449,6 +504,20 @@ export default function CollegeDashboardPage() {
     }
   };
 
+  const totalTeams = new Set(students.map(s => s.team?.name).filter(Boolean));
+  const totalUnteamedStudentsCount = students.filter(s => !s.team?.name).length;
+  const totalReelsCount = totalTeams.size + totalUnteamedStudentsCount;
+
+  const submittedTeamNames = new Set(
+    students
+      .filter(s => s.round2.status !== "not-submitted" && s.team?.name)
+      .map(s => s.team?.name)
+  );
+  const submittedIndividualCount = students.filter(
+    s => s.round2.status !== "not-submitted" && !s.team?.name
+  ).length;
+  const submittedReelsCount = submittedTeamNames.size + submittedIndividualCount;
+
   const handleLogout = () => {
     router.push("/");
   };
@@ -563,9 +632,21 @@ export default function CollegeDashboardPage() {
                     <div className="value">{students.filter(s => s.r1Score !== null).length}/{students.length}</div>
                     <div className="delta">students with a score</div>
                   </div>
-                  <div className="card stat-card">
+                  <div 
+                    className="card stat-card"
+                    onClick={() => setShowR2SubmissionsModal(true)}
+                    style={{ cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-4px)";
+                      e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  >
                     <div className="label">Round 2 submitted</div>
-                    <div className="value">{students.filter(s => s.round2.status !== "not-submitted").length}/{students.length}</div>
+                    <div className="value">{submittedReelsCount}/{totalReelsCount}</div>
                     <div className="delta">reels received</div>
                   </div>
                 </div>
@@ -1146,8 +1227,8 @@ export default function CollegeDashboardPage() {
                   </div>
                   <div className="card stat-card">
                     <div className="label">Reels submitted (R2)</div>
-                    <div className="value">{students.filter(s => s.round2.status !== "not-submitted").length}/{students.length}</div>
-                    <div className="delta">students</div>
+                    <div className="value">{submittedReelsCount}/{totalReelsCount}</div>
+                    <div className="delta">reels received</div>
                   </div>
                   <div className="card stat-card">
                     <div className="label">Demo-day films (R3)</div>
@@ -1357,6 +1438,125 @@ export default function CollegeDashboardPage() {
               {slotStudents.length === 0 && (
                 <p style={{ color: 'var(--slate-2)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>No students have selected this slot yet.</p>
               )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {showR2SubmissionsModal && (() => {
+        const teamsMap: Record<string, { members: string[], round2: typeof students[0]['round2'] }> = {};
+        students.forEach(s => {
+          if (s.team && s.team.name) {
+            if (!teamsMap[s.team.name]) {
+              teamsMap[s.team.name] = { members: [], round2: s.round2 };
+            }
+            if (!teamsMap[s.team.name].members.includes(s.name)) {
+              teamsMap[s.team.name].members.push(s.name);
+            }
+          } else if (s.round2.status !== "not-submitted") {
+            const key = `Individual: ${s.name}`;
+            teamsMap[key] = { members: [s.name], round2: s.round2 };
+          }
+        });
+
+        const teamList = Object.entries(teamsMap);
+
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => { setShowR2SubmissionsModal(false); setActivePreviewReel(null); }}>
+            <div className="card card-pad" style={{ background: 'var(--bg)', width: activePreviewReel ? '1000px' : '700px', maxWidth: '95%', maxHeight: '85vh', overflowY: 'auto', transition: 'width 0.3s' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18 }}>Round 2 Submissions (90-Sec Reel)</h3>
+                  <div style={{ fontSize: 13, color: 'var(--slate-2)', marginTop: 4 }}>
+                    {teamList.filter(([, t]) => t.round2.status !== "not-submitted").length} submission(s) received
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setShowR2SubmissionsModal(false); setActivePreviewReel(null); }}>Close</button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '20px', flexDirection: activePreviewReel ? 'row' : 'column' }}>
+                <div style={{ flex: 1, maxHeight: '60vh', overflowY: 'auto' }}>
+                  {teamList.length === 0 ? (
+                    <p style={{ color: 'var(--slate-2)', fontSize: 14, textAlign: 'center', padding: '20px 0' }}>No submissions yet.</p>
+                  ) : (
+                    <div className="stack" style={{ gap: '12px' }}>
+                      {teamList.map(([tName, tInfo]) => {
+                        const hasSubmitted = tInfo.round2.status !== "not-submitted";
+                        return (
+                          <div 
+                            key={tName} 
+                            style={{ 
+                              border: "1px solid var(--line)", 
+                              borderRadius: 10, 
+                              padding: 14, 
+                              background: activePreviewReel === tInfo.round2.link ? "#f0f4ff" : "#fdfdfd",
+                              borderColor: activePreviewReel === tInfo.round2.link ? "#3b82f6" : "var(--line)",
+                              cursor: hasSubmitted ? "pointer" : "default"
+                            }}
+                            onClick={() => {
+                              if (hasSubmitted && tInfo.round2.link) {
+                                setActivePreviewReel(tInfo.round2.link);
+                              }
+                            }}
+                          >
+                            <div className="row-between" style={{ marginBottom: 8 }}>
+                              <div>
+                                <strong style={{ fontSize: 14, color: "var(--navy)" }}>{tName}</strong>
+                                {!tName.startsWith("Individual:") && (
+                                  <span style={{ fontSize: 12, color: "var(--slate-2)", marginLeft: 8 }}>
+                                    ({tInfo.members.length} members)
+                                  </span>
+                                )}
+                              </div>
+                              <StatusBadge status={tInfo.round2.status} />
+                            </div>
+
+                            {!tName.startsWith("Individual:") && (
+                              <div style={{ fontSize: 11.5, color: "var(--slate-2)", marginBottom: 8 }}>
+                                {tInfo.members.join(", ")}
+                              </div>
+                            )}
+
+                            {hasSubmitted && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, background: '#f8fafc', padding: '6px 10px', borderRadius: '6px' }}>
+                                <div style={{ fontSize: 12, color: '#334155', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '300px' }}>
+                                  🔗 <a href={tInfo.round2.link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: 'var(--coral)', textDecoration: 'none' }}>{tInfo.round2.link}</a>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  {tInfo.round2.juryScore !== null ? (
+                                    <span style={{ fontSize: 12, fontWeight: 'bold', color: '#0f172a' }}>Score: {tInfo.round2.juryScore}/10</span>
+                                  ) : (
+                                    <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>Pending score</span>
+                                  )}
+                                  <span style={{ fontSize: 12, color: 'var(--coral)', fontWeight: 'bold' }}>
+                                    {activePreviewReel === tInfo.round2.link ? "Watching 👁️" : "Preview →"}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {tInfo.round2.note && (
+                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, fontStyle: 'italic' }}>
+                                Note: "{tInfo.round2.note}"
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {activePreviewReel && (
+                  <div style={{ flex: 1, background: '#f8fafc', padding: 14, borderRadius: 12, border: '1px solid var(--line)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div className="row-between" style={{ marginBottom: 10 }}>
+                      <strong style={{ fontSize: 14 }}>Reel Preview</strong>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--coral)' }} onClick={() => setActivePreviewReel(null)}>Close Preview</button>
+                    </div>
+                    {renderVideoEmbed(activePreviewReel)}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
