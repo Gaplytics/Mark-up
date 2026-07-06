@@ -868,6 +868,7 @@ app.post('/api/students', async (req: Request, res: Response): Promise<any> => {
   try {
     // 1. Create auth user
     const tempPassword = Math.random().toString(36).substring(2, 10) + "Ab1!";
+    let userId;
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: student.email,
       password: tempPassword,
@@ -875,11 +876,27 @@ app.post('/api/students', async (req: Request, res: Response): Promise<any> => {
     });
 
     if (authError) {
-      console.error("Auth creation error for student:", authError);
-      return res.status(500).json({ success: false, error: authError.message });
+      if (authError.status === 422 || authError.message.includes('email_exists') || authError.code === 'email_exists') {
+        console.log(`User ${student.email} already exists in Auth. Trying to fetch existing user...`);
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+        if (usersData && usersData.users) {
+          const existingUser = usersData.users.find(u => u.email === student.email);
+          if (existingUser) {
+            userId = existingUser.id;
+            // Optionally update password if needed: await supabaseAdmin.auth.admin.updateUserById(userId, { password: tempPassword });
+          } else {
+            return res.status(500).json({ success: false, error: 'Could not fetch users to resolve email_exists.' });
+          }
+        } else {
+          return res.status(500).json({ success: false, error: 'Could not fetch users to resolve email_exists.' });
+        }
+      } else {
+        console.error("Auth creation error for student:", authError);
+        return res.status(500).json({ success: false, error: authError.message });
+      }
+    } else {
+      userId = authData.user.id;
     }
-
-    const userId = authData.user.id;
 
     // 2. Insert into database
     const { data, error: dbError } = await supabaseAdmin
@@ -944,12 +961,30 @@ app.post('/api/students/bulk', async (req: Request, res: Response): Promise<any>
           email_confirm: true,
         });
 
+        let userId;
         if (authError) {
-          throw new Error(`Auth error for ${s.email}: ${authError.message}`);
+          if (authError.status === 422 || authError.message.includes('email_exists') || authError.code === 'email_exists') {
+            console.log(`User ${s.email} already exists in Auth. Trying to fetch existing user...`);
+            const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+            if (usersData && usersData.users) {
+              const existingUser = usersData.users.find(u => u.email === s.email);
+              if (existingUser) {
+                userId = existingUser.id;
+              } else {
+                throw new Error(`Could not fetch users to resolve email_exists for ${s.email}.`);
+              }
+            } else {
+              throw new Error(`Could not fetch users to resolve email_exists for ${s.email}.`);
+            }
+          } else {
+            throw new Error(`Auth error for ${s.email}: ${authError.message}`);
+          }
+        } else {
+          userId = authData.user.id;
         }
 
         createdStudents.push({
-          id: authData.user.id,
+          id: userId,
           name: s.name,
           email: s.email,
           phone: s.phone,

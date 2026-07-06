@@ -110,20 +110,41 @@ export default function StudentDashboardPage() {
   useEffect(() => {
     if (!quizStarted || examFinished || isDisqualified) return;
 
-    const disqualify = () => {
+    let localWarningCount = 0;
+    let lastViolationTime = 0;
+
+    const handleViolation = () => {
       if (isDisqualified) return;
-      setIsDisqualified(true);
-      addToast("You have been disqualified for violating proctoring rules.", "error", "Disqualified — ");
-      handleSubmitTest(false, 0);
+      
+      const now = Date.now();
+      if (now - lastViolationTime < 1000) return; // Debounce to prevent double-counting from simultaneous events
+      lastViolationTime = now;
+
+      localWarningCount++;
+      
+      if (localWarningCount > 3) {
+        setIsDisqualified(true);
+        addToast("You have been disqualified for repeatedly violating proctoring rules.", "error", "Disqualified — ");
+        handleSubmitTest(false, 0);
+      } else {
+        addToast(`Warning ${localWarningCount}/3: Do not switch tabs or exit fullscreen! You will be disqualified after 3 warnings.`, "error", "Proctoring Warning — ");
+        
+        // Attempt to re-enter fullscreen if they exited
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          setTimeout(() => {
+            document.documentElement.requestFullscreen().catch(() => {});
+          }, 1000);
+        }
+      }
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden) disqualify();
+      if (document.hidden) handleViolation();
     };
-    const handleBlur = () => { disqualify(); };
+    const handleBlur = () => { handleViolation(); };
     const handlePreventDefault = (e: Event) => { e.preventDefault(); };
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) disqualify();
+      if (!document.fullscreenElement) handleViolation();
     };
 
     window.addEventListener("blur", handleBlur);
