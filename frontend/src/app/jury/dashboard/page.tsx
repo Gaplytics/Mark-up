@@ -288,7 +288,7 @@ export default function JuryDashboardPage() {
           </div>
         </div>
 
-        {/* Main Area */}
+        {/* Main Area thing*/}
         <div className="main">
           <div className="topbar">
             <div>
