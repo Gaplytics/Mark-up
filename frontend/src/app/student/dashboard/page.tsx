@@ -113,23 +113,23 @@ export default function StudentDashboardPage() {
     let localWarningCount = 0;
     let lastViolationTime = 0;
 
-    const handleViolation = () => {
+    const handleViolation = (reason: string = "Proctoring violation detected") => {
       if (isDisqualified) return;
       
       const now = Date.now();
-      if (now - lastViolationTime < 1000) return; // Debounce to prevent double-counting from simultaneous events
+      if (now - lastViolationTime < 1000) return; // Debounce simultaneous events
       lastViolationTime = now;
 
       localWarningCount++;
       
       if (localWarningCount > 3) {
         setIsDisqualified(true);
-        addToast("You have been disqualified for repeatedly violating proctoring rules.", "error", "Disqualified — ");
+        addToast(`Disqualified: ${reason}. Exceeded 3 warnings.`, "error", "Disqualified — ");
         handleSubmitTest(false, 0);
       } else {
-        addToast(`Warning ${localWarningCount}/3: Do not switch tabs or exit fullscreen! You will be disqualified after 3 warnings.`, "error", "Proctoring Warning — ");
+        addToast(`Warning ${localWarningCount}/3: ${reason}! Violation recorded.`, "error", "Proctoring Warning — ");
         
-        // Attempt to re-enter fullscreen if they exited
+        // Attempt to re-enter fullscreen if exited
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
           setTimeout(() => {
             document.documentElement.requestFullscreen().catch(() => {});
@@ -138,31 +138,217 @@ export default function StudentDashboardPage() {
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) handleViolation();
-    };
-    const handleBlur = () => { handleViolation(); };
-    const handlePreventDefault = (e: Event) => { e.preventDefault(); };
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) handleViolation();
+    // 1. Mouse Event Handlers
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      handleViolation("Right-click / Context menu prohibited");
     };
 
+    const handleAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) { // Middle click
+        e.preventDefault();
+        handleViolation("Middle-click / Wheel click prohibited");
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      const examContainer = document.getElementById("exam-container");
+      if (examContainer && !examContainer.contains(e.target as Node)) {
+        handleViolation("Click outside exam window prohibited");
+      }
+    };
+
+    // 2. Keyboard Event Handler
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      const code = e.code;
+
+      // Function Keys (F1 - F12)
+      if (code.startsWith("F") && !isNaN(Number(code.replace("F", "")))) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation(`Function key ${code} shortcut restricted`);
+        return;
+      }
+
+      // PrintScreen / Screenshots
+      if (key === "printscreen" || code === "PrintScreen" || (e.shiftKey && key === "s" && (e.metaKey || e.ctrlKey))) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Screenshot / PrintScreen shortcut attempt detected");
+        return;
+      }
+
+      // Alt Shortcuts (Alt+Tab, Alt+F4, Alt+Esc, Alt+Left/Right navigation)
+      if (e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Alt-key shortcut restricted (App Switch / Navigation / Window action)");
+        return;
+      }
+
+      // Windows / Meta / OS Key Shortcuts
+      if (e.metaKey || key === "meta" || key === "os") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Windows / System shortcut restricted");
+        return;
+      }
+
+      // Ctrl / Cmd Combinations
+      if (e.ctrlKey || e.metaKey) {
+        const restrictedCtrlKeys = ["c", "v", "x", "a", "z", "y", "t", "w", "n", "r", "l", "d", "j", "h", "f", "k", "u", "s", "p"];
+        if (restrictedCtrlKeys.includes(key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleViolation(`Ctrl+${key.toUpperCase()} shortcut restricted`);
+          return;
+        }
+
+        if (e.shiftKey) {
+          const restrictedCtrlShiftKeys = ["i", "j", "c", "n", "s", "tab"];
+          if (restrictedCtrlShiftKeys.includes(key)) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleViolation(`Ctrl+Shift+${key.toUpperCase()} shortcut restricted`);
+            return;
+          }
+        }
+
+        if (key === "tab" || key === "escape" || key === "insert") {
+          e.preventDefault();
+          e.stopPropagation();
+          handleViolation(`Ctrl+${key} shortcut restricted`);
+          return;
+        }
+      }
+
+      // Shift + Insert (Paste)
+      if (e.shiftKey && key === "insert") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Shift+Insert shortcut restricted");
+        return;
+      }
+
+      // Escape Key (Leaving Fullscreen)
+      if (key === "escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Escape key / Fullscreen exit attempt");
+        return;
+      }
+    };
+
+    // 3. Clipboard & Drag/Drop
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      handleViolation("Copying text prohibited");
+    };
+
+    const handleCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      handleViolation("Cutting text prohibited");
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      handleViolation("Pasting text prohibited");
+    };
+
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+      handleViolation("Drag & Drop text/files prohibited");
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      handleViolation("Drag & Drop text/files prohibited");
+    };
+
+    const handleSelectStart = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+        e.preventDefault();
+      }
+    };
+
+    // 4. Browser Window & Visibility Events
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleViolation("Tab switched or window minimized");
+      }
+    };
+
+    const handleBlur = () => {
+      handleViolation("Exam window lost focus (Window Blur / App Switch)");
+    };
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        handleViolation("Exited Fullscreen Mode");
+      }
+    };
+
+    const handleResize = () => {
+      if (!document.fullscreenElement) {
+        handleViolation("Window resized / Exited Fullscreen");
+      }
+    };
+
+    const handleOffline = () => {
+      handleViolation("Internet network connection lost");
+    };
+
+    const handleOnline = () => {
+      addToast("Network reconnected.", "success");
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+      handleViolation("Navigating away or closing exam tab");
+    };
+
+    // Attach all event listeners
     window.addEventListener("blur", handleBlur);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    document.addEventListener("copy", handlePreventDefault);
-    document.addEventListener("cut", handlePreventDefault);
-    document.addEventListener("paste", handlePreventDefault);
-    document.addEventListener("contextmenu", handlePreventDefault);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("keydown", handleKeyDown, true);
+    document.addEventListener("contextmenu", handleContextMenu, true);
+    document.addEventListener("auxclick", handleAuxClick, true);
+    document.addEventListener("click", handleClick, true);
+    document.addEventListener("copy", handleCopy, true);
+    document.addEventListener("cut", handleCut, true);
+    document.addEventListener("paste", handlePaste, true);
+    document.addEventListener("dragstart", handleDragStart, true);
+    document.addEventListener("drop", handleDrop, true);
+    document.addEventListener("selectstart", handleSelectStart, true);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      document.removeEventListener("copy", handlePreventDefault);
-      document.removeEventListener("cut", handlePreventDefault);
-      document.removeEventListener("paste", handlePreventDefault);
-      document.removeEventListener("contextmenu", handlePreventDefault);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("contextmenu", handleContextMenu, true);
+      document.removeEventListener("auxclick", handleAuxClick, true);
+      document.removeEventListener("click", handleClick, true);
+      document.removeEventListener("copy", handleCopy, true);
+      document.removeEventListener("cut", handleCut, true);
+      document.removeEventListener("paste", handlePaste, true);
+      document.removeEventListener("dragstart", handleDragStart, true);
+      document.removeEventListener("drop", handleDrop, true);
+      document.removeEventListener("selectstart", handleSelectStart, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizStarted, examFinished, isDisqualified]);
@@ -258,9 +444,11 @@ export default function StudentDashboardPage() {
     setQuizAnswers({ ...quizAnswers, [questionIdx]: optionIdx });
   };
 
-  function handleSubmitTest(isTimeout = false, finalScore?: number) {
+  function handleSubmitTest(isTimeout = false, finalScore?: number, proctoringFlagged = false, proctoringNote?: string) {
     if (!currentStudent) return;
     const scoreToSave = finalScore !== undefined ? finalScore : testScore;
+    const flagged = proctoringFlagged || isDisqualified;
+    const note = proctoringNote || (isDisqualified ? "Disqualified due to proctoring violations" : null);
 
     // Send score to backend to insert into Supabase scores table
     fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-score`, {
@@ -269,7 +457,9 @@ export default function StudentDashboardPage() {
       body: JSON.stringify({
         score: scoreToSave,
         round: "round1",
-        total_questions: 30
+        total_questions: 30,
+        proctoring_flagged: flagged,
+        proctoring_note: note
       })
     })
     .then(res => res.json())
@@ -661,7 +851,7 @@ export default function StudentDashboardPage() {
                 )}
 
                 {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && !examFinished && !isDisqualified && (
-                  <div className="card card-pad">
+                  <div className="card card-pad" id="exam-container">
                     <style>{`
                       @keyframes pulse {
                         0% { opacity: 0.3; }

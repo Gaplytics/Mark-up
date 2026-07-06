@@ -343,7 +343,7 @@ export default function JuryDashboardPage() {
                             <td><b>{s.name}</b></td>
                             <td>{s.college}</td>
                             <td>{s.r1Score !== null ? "Tested" : "Pending"}</td>
-                            <td>{s.r1Score !== null ? s.r1Score.toFixed(1) + " / 10.0" : "—"}</td>
+                            <td>{s.r1Score !== null ? (s.r1Score / 3).toFixed(1) + " / 10.0" : "—"}</td>
                           </tr>
                         );
                       })}

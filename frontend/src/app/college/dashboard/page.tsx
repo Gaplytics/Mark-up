@@ -458,7 +458,7 @@ export default function CollegeDashboardPage() {
     const newRounds = { ...rounds, [roundKey]: "live" };
     setRounds(newRounds as any);
     if (roundKey === "round1") {
-      setStudents(students.map(s => ({ ...s, round1Status: "in-progress" })));
+      setStudents(students.map(s => s.round1Status === "submitted" ? s : { ...s, round1Status: "in-progress" }));
     }
     addToast("Students can now begin " + roundKey.replace("round", "Round "), "success", "Round flagged off — ");
     
@@ -509,7 +509,7 @@ export default function CollegeDashboardPage() {
           `#${i + 1}`,
           r.s.name,
           r.s.r1Score !== null ? "Tested" : "—",
-          r.s.r1Score !== null ? r.s.r1Score.toFixed(1) : "—",
+          r.s.r1Score !== null ? (r.s.r1Score / 3).toFixed(1) : "—",
           r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : (r.s.round2.status === "pending" ? "Pending" : "Not submitted"),
           r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : (r.s.round3.status === "pending" ? "Pending" : "Not submitted"),
           r.avg.toFixed(1)
@@ -1293,7 +1293,7 @@ export default function CollegeDashboardPage() {
                                 <div style={{ fontSize: 11, color: "var(--slate-2)" }}>{r.s.college}</div>
                               </td>
                               <td>{r.s.r1Score !== null ? "Tested" : "—"}</td>
-                              <td>{r.s.r1Score !== null ? r.s.r1Score.toFixed(1) : "—"}</td>
+                              <td>{r.s.r1Score !== null ? (r.s.r1Score / 3).toFixed(1) : "—"}</td>
                               <td>{r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : <StatusBadge status={r.s.round2.status} />}</td>
                               <td>{r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : <StatusBadge status={r.s.round3.status} />}</td>
                               <td><b>{r.avg.toFixed(1)}</b></td>

@@ -281,7 +281,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
   const studentAverage = (s: Student) => {
     const scores: number[] = [];
-    if (s.r1Score !== null) scores.push(s.r1Score);
+    if (s.r1Score !== null) scores.push(s.r1Score / 3);
     if (s.round2.juryScore !== null) scores.push(s.round2.juryScore);
     if (s.round3.juryScore !== null) scores.push(s.round3.juryScore);
     if (scores.length === 0) return 0;

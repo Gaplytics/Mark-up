@@ -130,13 +130,25 @@ export default function StudentLoginPage() {
                   {otpInputs.map((val, idx) => (
                     <input
                       key={idx}
+                      id={`otp-${idx}`}
                       maxLength={1}
                       className="otpd"
                       value={val}
                       onChange={(e) => {
                         const newInputs = [...otpInputs];
-                        newInputs[idx] = e.target.value;
+                        const inputVal = e.target.value;
+                        newInputs[idx] = inputVal;
                         setOtpInputs(newInputs);
+                        if (inputVal && idx < 3) {
+                          const nextInput = document.getElementById(`otp-${idx + 1}`);
+                          if (nextInput) nextInput.focus();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Backspace" && !val && idx > 0) {
+                          const prevInput = document.getElementById(`otp-${idx - 1}`);
+                          if (prevInput) prevInput.focus();
+                        }
                       }}
                       disabled={isProcessing}
                     />
