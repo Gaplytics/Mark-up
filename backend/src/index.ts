@@ -817,13 +817,18 @@ app.post('/api/students/assign-team', async (req: Request, res: Response): Promi
     let teamId;
     const { data: teamData } = await supabaseAdmin
       .from('teams')
-      .select('id')
+      .select('id, leader_id')
       .eq('college_id', collegeId)
       .eq('name', trimmedName)
       .maybeSingle();
 
     if (teamData) {
       teamId = teamData.id;
+      // If team exists but has no leader, assign one randomly from the incoming batch
+      if (!teamData.leader_id && studentIds.length > 0) {
+        const randomLeaderId = studentIds[Math.floor(Math.random() * studentIds.length)];
+        await supabaseAdmin.from('teams').update({ leader_id: randomLeaderId }).eq('id', teamId);
+      }
     } else {
       // Create new team, appointing a team leader randomly
       const randomLeaderId = studentIds[Math.floor(Math.random() * studentIds.length)];

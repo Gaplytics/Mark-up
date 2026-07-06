@@ -1133,11 +1133,14 @@ export default function CollegeDashboardPage() {
                               </button>
                             </div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                              {members.map(m => (
-                                <span key={m.id} style={{ background: "#eee", fontSize: 11, padding: "4px 8px", borderRadius: 16 }}>
-                                  {m.name}
-                                </span>
-                              ))}
+                              {members.map(m => {
+                                const isLeader = m.team?.leaderId === m.id;
+                                return (
+                                  <span key={m.id} style={{ background: isLeader ? "var(--coral)" : "#eee", color: isLeader ? "#fff" : "inherit", fontSize: 11, padding: "4px 8px", borderRadius: 16 }}>
+                                    {m.name}{isLeader && <span style={{ marginLeft: 4 }}> (Leader)</span>}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </div>
                         ))
@@ -1424,7 +1427,10 @@ export default function CollegeDashboardPage() {
                         <tbody>
                           {members.map(s => (
                             <tr key={s.id} style={{ fontSize: 13, borderTop: '1px solid var(--line)' }}>
-                              <td style={{ padding: '8px 4px', fontWeight: 500 }}>{s.name}</td>
+                              <td style={{ padding: '8px 4px', fontWeight: 500 }}>
+                                {s.name}
+                                {s.team?.leaderId === s.id && <span style={{ fontSize: 12, marginLeft: 4, color: 'var(--coral)' }}>(Leader)</span>}
+                              </td>
                               <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.email}</td>
                               <td style={{ padding: '8px 4px', color: 'var(--slate-2)' }}>{s.phone}</td>
                             </tr>
