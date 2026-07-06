@@ -367,11 +367,27 @@ app.post('/api/student/send-otp', async (req, res) => {
         // Check if student exists in the database
         const { data: student, error } = await supabase_1.supabaseAdmin
             .from('students')
-            .select('*')
+            .select('*, teams:teams!students_team_id_fkey(leader_id)')
             .eq('email', normalizedEmail)
             .maybeSingle();
         if (error || !student) {
             return res.status(400).json({ success: false, error: 'This email is not registered as a student. Contact your College Admin.' });
+        }
+        // Check college settings - if Round 1 is closed, only leaders can login/request OTP
+        const { data: settings } = await supabase_1.supabaseAdmin
+            .from('college_settings')
+            .select('round1_status')
+            .eq('college_id', student.college_id)
+            .maybeSingle();
+        const round1Status = settings ? settings.round1_status : 'not-started';
+        if (round1Status === 'closed') {
+            const isLeader = student.teams && (Array.isArray(student.teams) ? student.teams[0]?.leader_id === student.id : student.teams?.leader_id === student.id);
+            if (!isLeader) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Round 1 is completed. Only Team Leaders are authorized to log in for subsequent rounds.'
+                });
+            }
         }
         const otpCode = String(Math.floor(1000 + Math.random() * 9000));
         activeOtps.set(normalizedEmail, otpCode);
@@ -423,6 +439,22 @@ app.post('/api/student/verify-otp', async (req, res) => {
             .single();
         if (error || !student) {
             return res.status(400).json({ success: false, error: 'Student profile not found.' });
+        }
+        // Check college settings - if Round 1 is closed, only leaders can login/verify OTP
+        const { data: settings } = await supabase_1.supabaseAdmin
+            .from('college_settings')
+            .select('round1_status')
+            .eq('college_id', student.college_id)
+            .maybeSingle();
+        const round1Status = settings ? settings.round1_status : 'not-started';
+        if (round1Status === 'closed') {
+            const isLeader = student.teams && (Array.isArray(student.teams) ? student.teams[0]?.leader_id === student.id : student.teams?.leader_id === student.id);
+            if (!isLeader) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Round 1 is completed. Only Team Leaders are authorized to log in for subsequent rounds.'
+                });
+            }
         }
         // Resolve college name if possible
         let collegeName = "Unknown College";
@@ -715,37 +747,120 @@ app.post('/api/students/assign-team', async (req, res) => {
     if (!studentIds || !Array.isArray(studentIds)) {
         return res.status(400).json({ success: false, error: 'studentIds array is required' });
     }
+    const cleanupEmptyTeams = async (collegeId) => {
+        try {
+            const { data: teams } = await supabase_1.supabaseAdmin
+                .from('teams')
+                .select('id, name')
+                .eq('college_id', collegeId);
+            if (teams && teams.length > 0) {
+                for (const t of teams) {
+                    const { count } = await supabase_1.supabaseAdmin
+                        .from('students')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('team_id', t.id);
+                    if (count === 0 && !t.name.endsWith(' (Individual)')) {
+                        await supabase_1.supabaseAdmin.from('teams').delete().eq('id', t.id);
+                        console.log(`Deleted empty competitive team: ${t.name}`);
+                    }
+                }
+            }
+        }
+        catch (err) {
+            console.error("Cleanup empty teams error:", err);
+        }
+    };
     try {
         if (!teamName) {
-            // Unassign team
-            const { error } = await supabase_1.supabaseAdmin
+            const { data: studentsData, error: sErr } = await supabase_1.supabaseAdmin
                 .from('students')
-                .update({ team_id: null })
+                .select('id, name, college_id')
                 .in('id', studentIds);
-            if (error)
-                throw error;
+            if (sErr || !studentsData || studentsData.length === 0)
+                throw new Error("Could not fetch students");
+            const collegeId = studentsData[0].college_id;
+            for (const student of studentsData) {
+                const expectedName = `${student.name} (Individual)`;
+                const { data: existingTeam } = await supabase_1.supabaseAdmin
+                    .from('teams')
+                    .select('id')
+                    .eq('college_id', student.college_id)
+                    .eq('name', expectedName)
+                    .maybeSingle();
+                let targetTeamId;
+                if (existingTeam) {
+                    targetTeamId = existingTeam.id;
+                }
+                else {
+                    const { data: newTeam, error: teamErr } = await supabase_1.supabaseAdmin
+                        .from('teams')
+                        .insert([{ name: expectedName, college_id: student.college_id, leader_id: student.id }])
+                        .select()
+                        .single();
+                    if (teamErr || !newTeam) {
+                        console.error(`Failed to recreate default team for ${student.name}:`, teamErr);
+                        continue;
+                    }
+                    targetTeamId = newTeam.id;
+                }
+                await supabase_1.supabaseAdmin
+                    .from('students')
+                    .update({ team_id: targetTeamId })
+                    .eq('id', student.id);
+            }
+            await cleanupEmptyTeams(collegeId);
             return res.json({ success: true });
         }
         const trimmedName = teamName.trim();
-        // 1. Get college_id from first student (assuming they belong to the same college)
+        // 1. Fetch details of all incoming students
         const { data: studentsData, error: sErr } = await supabase_1.supabaseAdmin
             .from('students')
-            .select('college_id')
-            .in('id', studentIds)
-            .limit(1);
-        if (sErr || !studentsData || studentsData.length === 0)
-            throw new Error("Could not fetch students");
+            .select('id, name, college_id, slot_id')
+            .in('id', studentIds);
+        if (sErr || !studentsData || studentsData.length === 0) {
+            return res.status(400).json({ success: false, error: 'Could not retrieve student records.' });
+        }
         const collegeId = studentsData[0].college_id;
+        const targetSlotId = studentsData[0].slot_id;
+        // Validate that all students have selected a slot
+        const slotlessStudent = studentsData.find(s => !s.slot_id);
+        if (slotlessStudent) {
+            return res.status(400).json({ success: false, error: `Student "${slotlessStudent.name}" must select a slot before they can be assigned to a team.` });
+        }
+        // Validate that all students share the same slot
+        const mismatchedStudent = studentsData.find(s => s.slot_id !== targetSlotId);
+        if (mismatchedStudent) {
+            return res.status(400).json({ success: false, error: 'All team members must belong to the same slot.' });
+        }
         // 2. Check if team exists for this college
         let teamId;
         const { data: teamData } = await supabase_1.supabaseAdmin
             .from('teams')
-            .select('id')
+            .select('id, leader_id')
             .eq('college_id', collegeId)
             .eq('name', trimmedName)
             .maybeSingle();
         if (teamData) {
             teamId = teamData.id;
+            // Verify that existing members of this team belong to the same slot
+            const { data: existingMembers } = await supabase_1.supabaseAdmin
+                .from('students')
+                .select('slot_id, name')
+                .eq('team_id', teamId);
+            if (existingMembers && existingMembers.length > 0) {
+                const differentSlotMember = existingMembers.find(m => m.slot_id !== targetSlotId);
+                if (differentSlotMember) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Cannot add students to team "${trimmedName}" because member "${differentSlotMember.name}" belongs to a different slot.`
+                    });
+                }
+            }
+            // If team exists but has no leader, assign one randomly from the incoming batch
+            if (!teamData.leader_id && studentIds.length > 0) {
+                const randomLeaderId = studentIds[Math.floor(Math.random() * studentIds.length)];
+                await supabase_1.supabaseAdmin.from('teams').update({ leader_id: randomLeaderId }).eq('id', teamId);
+            }
         }
         else {
             // Create new team, appointing a team leader randomly
@@ -766,6 +881,7 @@ app.post('/api/students/assign-team', async (req, res) => {
             .in('id', studentIds);
         if (updErr)
             throw updErr;
+        await cleanupEmptyTeams(collegeId);
         return res.json({ success: true });
     }
     catch (err) {
@@ -788,17 +904,39 @@ app.post('/api/students', async (req, res) => {
     try {
         // 1. Create auth user
         const tempPassword = Math.random().toString(36).substring(2, 10) + "Ab1!";
+        let userId;
         const { data: authData, error: authError } = await supabase_1.supabaseAdmin.auth.admin.createUser({
             email: student.email,
             password: tempPassword,
             email_confirm: true,
         });
         if (authError) {
-            console.error("Auth creation error for student:", authError);
-            return res.status(500).json({ success: false, error: authError.message });
+            if (authError.status === 422 || authError.message.includes('email_exists') || authError.code === 'email_exists') {
+                console.log(`User ${student.email} already exists in Auth. Trying to fetch existing user...`);
+                const { data: usersData } = await supabase_1.supabaseAdmin.auth.admin.listUsers();
+                if (usersData && usersData.users) {
+                    const existingUser = usersData.users.find(u => u.email === student.email);
+                    if (existingUser) {
+                        userId = existingUser.id;
+                        // Optionally update password if needed: await supabaseAdmin.auth.admin.updateUserById(userId, { password: tempPassword });
+                    }
+                    else {
+                        return res.status(500).json({ success: false, error: 'Could not fetch users to resolve email_exists.' });
+                    }
+                }
+                else {
+                    return res.status(500).json({ success: false, error: 'Could not fetch users to resolve email_exists.' });
+                }
+            }
+            else {
+                console.error("Auth creation error for student:", authError);
+                return res.status(500).json({ success: false, error: authError.message });
+            }
         }
-        const userId = authData.user.id;
-        // 2. Insert into database
+        else {
+            userId = authData.user.id;
+        }
+        // 2. Insert student record first with team_id = null to resolve foreign key constraint chicken-and-egg problem
         const { data, error: dbError } = await supabase_1.supabaseAdmin
             .from('students')
             .insert([{
@@ -810,6 +948,7 @@ app.post('/api/students', async (req, res) => {
                 slot_id: student.slotId,
                 round1_status: student.round1Status,
                 r1_score: student.r1Score,
+                team_id: null
             }])
             .select();
         if (dbError) {
@@ -818,6 +957,49 @@ app.post('/api/students', async (req, res) => {
             return res.status(500).json({ success: false, error: dbError.message });
         }
         const dbStudent = data ? data[0] : null;
+        if (!dbStudent) {
+            await supabase_1.supabaseAdmin.auth.admin.deleteUser(userId);
+            return res.status(500).json({ success: false, error: "Failed to retrieve created student record." });
+        }
+        // 3. Create default individual team for the student (referencing the newly created student ID as leader)
+        const teamName = `${student.name} (Individual)`;
+        let teamId;
+        const { data: existingTeam } = await supabase_1.supabaseAdmin
+            .from('teams')
+            .select('id')
+            .eq('college_id', student.collegeId)
+            .eq('name', teamName)
+            .maybeSingle();
+        if (existingTeam) {
+            teamId = existingTeam.id;
+        }
+        else {
+            const { data: newTeam, error: teamErr } = await supabase_1.supabaseAdmin
+                .from('teams')
+                .insert([{ name: teamName, college_id: student.collegeId, leader_id: userId }])
+                .select()
+                .single();
+            if (teamErr || !newTeam) {
+                console.error("Failed to create default individual team:", teamErr);
+                await supabase_1.supabaseAdmin.from('students').delete().eq('id', userId);
+                await supabase_1.supabaseAdmin.auth.admin.deleteUser(userId);
+                return res.status(500).json({ success: false, error: teamErr?.message || "Failed to create individual team." });
+            }
+            teamId = newTeam.id;
+        }
+        // 4. Update the student record to link it to the newly created team ID
+        const { error: updateErr } = await supabase_1.supabaseAdmin
+            .from('students')
+            .update({ team_id: teamId })
+            .eq('id', userId);
+        if (updateErr) {
+            console.error("Failed to update student with team_id:", updateErr);
+            await supabase_1.supabaseAdmin.from('teams').delete().eq('id', teamId);
+            await supabase_1.supabaseAdmin.from('students').delete().eq('id', userId);
+            await supabase_1.supabaseAdmin.auth.admin.deleteUser(userId);
+            return res.status(500).json({ success: false, error: updateErr.message });
+        }
+        dbStudent.team_id = teamId;
         if (dbStudent) {
             try {
                 await sendSlotSelectionEmail(dbStudent.id, dbStudent.email, dbStudent.name);
@@ -855,11 +1037,33 @@ app.post('/api/students/bulk', async (req, res) => {
                     password: tempPassword,
                     email_confirm: true,
                 });
+                let userId;
                 if (authError) {
-                    throw new Error(`Auth error for ${s.email}: ${authError.message}`);
+                    if (authError.status === 422 || authError.message.includes('email_exists') || authError.code === 'email_exists') {
+                        console.log(`User ${s.email} already exists in Auth. Trying to fetch existing user...`);
+                        const { data: usersData } = await supabase_1.supabaseAdmin.auth.admin.listUsers();
+                        if (usersData && usersData.users) {
+                            const existingUser = usersData.users.find(u => u.email === s.email);
+                            if (existingUser) {
+                                userId = existingUser.id;
+                            }
+                            else {
+                                throw new Error(`Could not fetch users to resolve email_exists for ${s.email}.`);
+                            }
+                        }
+                        else {
+                            throw new Error(`Could not fetch users to resolve email_exists for ${s.email}.`);
+                        }
+                    }
+                    else {
+                        throw new Error(`Auth error for ${s.email}: ${authError.message}`);
+                    }
+                }
+                else {
+                    userId = authData.user.id;
                 }
                 createdStudents.push({
-                    id: authData.user.id,
+                    id: userId,
                     name: s.name,
                     email: s.email,
                     phone: s.phone,
@@ -877,9 +1081,14 @@ app.post('/api/students/bulk', async (req, res) => {
                 return res.status(500).json({ success: false, error: err.message });
             }
         }
-        const { data, error: dbError } = await supabase_1.supabaseAdmin
+        // 2. Insert student records with team_id = null first to satisfy foreign key constraints
+        const studentsToInsert = createdStudents.map((s) => ({
+            ...s,
+            team_id: null
+        }));
+        const { data: insertedStudents, error: dbError } = await supabase_1.supabaseAdmin
             .from('students')
-            .insert(createdStudents)
+            .insert(studentsToInsert)
             .select();
         if (dbError) {
             console.error("POST /api/students/bulk DB error:", dbError);
@@ -888,8 +1097,38 @@ app.post('/api/students/bulk', async (req, res) => {
             }
             return res.status(500).json({ success: false, error: dbError.message });
         }
-        if (data && Array.isArray(data)) {
-            for (const dbStudent of data) {
+        // 3. Bulk create default individual teams for each student in the batch
+        const teamsToCreate = (insertedStudents || []).map((s) => ({
+            name: `${s.name} (Individual)`,
+            college_id: s.college_id,
+            leader_id: s.id
+        }));
+        const { data: createdTeams, error: teamsError } = await supabase_1.supabaseAdmin
+            .from('teams')
+            .insert(teamsToCreate)
+            .select();
+        if (teamsError) {
+            console.error("POST /api/students/bulk teams creation error:", teamsError);
+            const studentIds = (insertedStudents || []).map((s) => s.id);
+            await supabase_1.supabaseAdmin.from('students').delete().in('id', studentIds);
+            for (const created of createdStudents) {
+                await supabase_1.supabaseAdmin.auth.admin.deleteUser(created.id);
+            }
+            return res.status(500).json({ success: false, error: teamsError.message });
+        }
+        // 4. Update student records with their respective default team IDs
+        for (const team of (createdTeams || [])) {
+            await supabase_1.supabaseAdmin
+                .from('students')
+                .update({ team_id: team.id })
+                .eq('id', team.leader_id);
+            const match = (insertedStudents || []).find((s) => s.id === team.leader_id);
+            if (match) {
+                match.team_id = team.id;
+            }
+        }
+        if (insertedStudents && Array.isArray(insertedStudents)) {
+            for (const dbStudent of insertedStudents) {
                 try {
                     await sendSlotSelectionEmail(dbStudent.id, dbStudent.email, dbStudent.name);
                 }
@@ -898,7 +1137,7 @@ app.post('/api/students/bulk', async (req, res) => {
                 }
             }
         }
-        return res.json({ success: true, data });
+        return res.json({ success: true, data: insertedStudents });
     }
     catch (err) {
         console.error("Unexpected error in POST /api/students/bulk:", err);
@@ -1006,13 +1245,29 @@ app.post('/api/teams/notify', async (req, res) => {
         for (const [groupName, members] of Object.entries(groups)) {
             const teamsData = members[0]?.teams;
             const leaderId = Array.isArray(teamsData) ? teamsData[0]?.leader_id : teamsData?.leader_id;
-            const leader = members.find((m) => m.id === leaderId);
-            const leaderName = leader ? leader.name : "To be assigned";
+            let leaderName = "To be assigned";
+            if (leaderId) {
+                const leader = members.find((m) => m.id === leaderId);
+                if (leader) {
+                    leaderName = leader.name;
+                }
+                else {
+                    // Fallback: Fetch directly from Supabase if not in current slot members
+                    const { data: leaderData } = await supabase_1.supabaseAdmin
+                        .from('students')
+                        .select('name')
+                        .eq('id', leaderId)
+                        .maybeSingle();
+                    if (leaderData) {
+                        leaderName = leaderData.name;
+                    }
+                }
+            }
             const membersHtml = members.map((m) => {
                 const isLeader = m.id === leaderId;
                 return `<tr>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: ${isLeader ? 'bold' : 'normal'};">
-            ${m.name} ${isLeader ? '<span style="color: #FF5A5F; font-size: 11px; margin-left: 6px; padding: 2px 6px; background: #FFF0F0; border-radius: 4px; border: 1px solid #FFE0E0;">👑 Team Leader</span>' : ''}
+            ${m.name} ${isLeader ? '<span style="color: #FF5A5F; font-size: 11px; margin-left: 6px; padding: 2px 6px; background: #FFF0F0; border-radius: 4px; border: 1px solid #FFE0E0;">(Leader)</span>' : ''}
           </td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.email}</td>
           <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.phone}</td>
@@ -1241,18 +1496,60 @@ app.post('/api/students/:id/submit-round', async (req, res) => {
         // 1. Fetch the student's team_id and check if they are the leader
         const { data: student, error: fetchErr } = await supabase_1.supabaseAdmin
             .from('students')
-            .select('team_id, teams:teams!students_team_id_fkey(leader_id)')
+            .select('college_id, team_id, teams:teams!students_team_id_fkey(leader_id)')
             .eq('id', id)
             .maybeSingle();
         if (fetchErr || !student) {
             return res.status(404).json({ success: false, error: 'Student profile not found.' });
         }
-        const { team_id, teams } = student;
+        const { college_id, team_id, teams } = student;
         if (!team_id) {
             return res.status(400).json({ success: false, error: 'You are not assigned to any team. Contact your College Admin.' });
         }
         if (teams && teams.leader_id !== id) {
             return res.status(403).json({ success: false, error: 'Only the Team Leader is authorized to submit for your team.' });
+        }
+        // Check round status in college settings
+        const { data: settings, error: settingsErr } = await supabase_1.supabaseAdmin
+            .from('college_settings')
+            .select('*')
+            .eq('college_id', college_id)
+            .maybeSingle();
+        if (settingsErr) {
+            console.error("Fetch college settings error:", settingsErr);
+            return res.status(500).json({ success: false, error: 'Could not verify round status.' });
+        }
+        const roundStatus = settings
+            ? (roundKey === 'round2' ? settings.round2_status : settings.round3_status)
+            : 'not-started';
+        if (roundStatus !== 'live') {
+            const roundName = roundKey === 'round2' ? 'Round 2' : 'Round 3';
+            if (roundStatus === 'not-started') {
+                return res.status(403).json({ success: false, error: `${roundName} submissions have not been opened yet.` });
+            }
+            else if (roundStatus === 'closed') {
+                return res.status(403).json({ success: false, error: `${roundName} submissions are now closed.` });
+            }
+            else {
+                return res.status(403).json({ success: false, error: `${roundName} submissions are currently unavailable.` });
+            }
+        }
+        // Check if all team members have completed Round 1
+        const { data: teamMembers, error: membersErr } = await supabase_1.supabaseAdmin
+            .from('students')
+            .select('id, name, round1_status')
+            .eq('team_id', team_id);
+        if (membersErr || !teamMembers || teamMembers.length === 0) {
+            console.error("Fetch team members error:", membersErr);
+            return res.status(500).json({ success: false, error: 'Could not verify team qualification.' });
+        }
+        const unqualifiedMembers = teamMembers.filter(m => m.round1_status !== 'submitted');
+        if (unqualifiedMembers.length > 0) {
+            const names = unqualifiedMembers.map(m => `"${m.name}"`).join(', ');
+            return res.status(403).json({
+                success: false,
+                error: `Your team cannot submit because member(s) ${names} have not completed Round 1.`
+            });
         }
         // 2. Prepare update payload
         const updateData = {};

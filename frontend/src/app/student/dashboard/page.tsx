@@ -147,6 +147,39 @@ export default function StudentDashboardPage() {
       if (!document.fullscreenElement) handleViolation();
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent F12
+      if (e.key === "F12" || e.keyCode === 123) {
+        e.preventDefault();
+        addToast("DevTools shortcut is blocked during the exam.", "error", "Proctoring Alert — ");
+        return;
+      }
+      // Prevent Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
+      if (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C" || e.key === "i" || e.key === "j" || e.key === "c" || e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) {
+        e.preventDefault();
+        addToast("DevTools shortcut is blocked during the exam.", "error", "Proctoring Alert — ");
+        return;
+      }
+      // Prevent Ctrl+U (View Source)
+      if (e.ctrlKey && (e.key === "u" || e.key === "U" || e.keyCode === 85)) {
+        e.preventDefault();
+        addToast("Viewing page source is blocked during the exam.", "error", "Proctoring Alert — ");
+        return;
+      }
+      // Prevent F5 & Ctrl+R (Reload)
+      if (e.key === "F5" || e.keyCode === 116 || (e.ctrlKey && (e.key === "r" || e.key === "R" || e.keyCode === 82))) {
+        e.preventDefault();
+        addToast("Refreshing the page during the exam is blocked.", "error", "Proctoring Alert — ");
+        return;
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "Are you sure you want to exit the exam? Your progress will be lost.";
+      return e.returnValue;
+    };
+
     window.addEventListener("blur", handleBlur);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener("copy", handlePreventDefault);
@@ -154,6 +187,8 @@ export default function StudentDashboardPage() {
     document.addEventListener("paste", handlePreventDefault);
     document.addEventListener("contextmenu", handlePreventDefault);
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
@@ -163,6 +198,8 @@ export default function StudentDashboardPage() {
       document.removeEventListener("paste", handlePreventDefault);
       document.removeEventListener("contextmenu", handlePreventDefault);
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizStarted, examFinished, isDisqualified]);

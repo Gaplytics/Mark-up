@@ -700,7 +700,7 @@ export default function CollegeDashboardPage() {
                     <div className="stack" style={{ marginTop: 6 }}>
                       {slots.map(slot => {
                         const slotStudents = students.filter(s => s.slotId === slot.id);
-                        const unassignedInSlot = slotStudents.filter(s => !s.teamId);
+                        const unassignedInSlot = slotStudents.filter(s => !s.teamId || s.team?.name === `${s.name} (Individual)`);
                         const alreadyTeamed = unassignedInSlot.length === 0 && slotStudents.length > 0;
                         return (
                           <div key={slot.id} style={{ fontSize: 13, padding: "10px 12px", background: "#fdfdfd", border: "1px solid var(--line)", borderRadius: 8 }}>
@@ -718,10 +718,10 @@ export default function CollegeDashboardPage() {
                                     setIsProcessing(true);
                                     try {
                                       const shuffled = [...unassignedInSlot].sort(() => Math.random() - 0.5);
-                                      // Find existing teams and their sizes
+                                      // Find existing teams and their sizes (excluding default individual teams)
                                       const teamsMap: Record<string, string[]> = {};
                                       slotStudents.forEach(s => {
-                                        if (s.team?.name) {
+                                        if (s.team?.name && s.team.name !== `${s.name} (Individual)`) {
                                           if (!teamsMap[s.team?.name]) teamsMap[s.team?.name] = [];
                                           teamsMap[s.team?.name].push(s.id);
                                         }
@@ -746,10 +746,11 @@ export default function CollegeDashboardPage() {
                                       const existingTeamCount = Object.keys(teamsMap).length;
                                       let newTeamIndex = 0;
                                       const newTeams: { name: string; ids: string[] }[] = [];
+                                      const cleanSlotLabel = slot.label.replace(/–/g, '-').trim();
                                       for (let i = 0; i < remaining.length; i += 5) {
                                         if (existingTeamCount + newTeamIndex >= MAX_GROUPS) break;
                                         const chunk = remaining.slice(i, i + 5);
-                                        const gName = `Team ${existingTeamCount + newTeamIndex + 1}`;
+                                        const gName = `Team ${existingTeamCount + newTeamIndex + 1} (${cleanSlotLabel})`;
                                         newTeamIndex++;
                                         newTeams.push({ name: gName, ids: chunk.map(s => s.id) });
                                         chunk.forEach(s => (allAssignments[s.id] = gName));
@@ -953,13 +954,13 @@ export default function CollegeDashboardPage() {
               const slotLabel = slots.find(s => s.id === teamFormationSlot)?.label.split("·")[1] || teamFormationSlot;
               const slotStudents = students.filter(s => s.slotId === teamFormationSlot);
               
-              // Unassigned students in this slot
-              const unassigned = slotStudents.filter(s => !s.teamId);
+              // Unassigned students in this slot (treat default individual teams as unassigned/unteamed)
+              const unassigned = slotStudents.filter(s => !s.teamId || s.team?.name === `${s.name} (Individual)`);
               
-              // Team assigned students by teamName
+              // Team assigned students by teamName (exclude individual teams)
               const teamsMap: Record<string, typeof slotStudents> = {};
               slotStudents.forEach(s => {
-                if (s.team?.name) {
+                if (s.team?.name && s.team.name !== `${s.name} (Individual)`) {
                   if (!teamsMap[s.team?.name]) teamsMap[s.team?.name] = [];
                   teamsMap[s.team?.name].push(s);
                 }
@@ -1021,10 +1022,12 @@ export default function CollegeDashboardPage() {
                   const existingTeamCount = Object.keys(teamsMap).length;
                   let newTeamIndex = 0;
                   const newTeams: { name: string; ids: string[] }[] = [];
+                  const slot = slots.find(s => s.id === teamFormationSlot);
+                  const cleanSlotLabel = slot ? slot.label.replace(/–/g, '-').trim() : teamFormationSlot;
                   for (let i = 0; i < remaining.length; i += GROUP_SIZE) {
                     if (existingTeamCount + newTeamIndex >= MAX_GROUPS) break;
                     const chunk = remaining.slice(i, i + GROUP_SIZE);
-                    const gName = `Team ${existingTeamCount + newTeamIndex + 1}`;
+                    const gName = `Team ${existingTeamCount + newTeamIndex + 1} (${cleanSlotLabel})`;
                     newTeamIndex++;
                     newTeams.push({ name: gName, ids: chunk.map(s => s.id) });
                     chunk.forEach(s => (allAssignments[s.id] = gName));
@@ -1392,10 +1395,10 @@ export default function CollegeDashboardPage() {
       {showSlotModal && (() => {
         const slot = slots.find(s => s.id === showSlotModal);
         const slotStudents = students.filter(s => s.slotId === showSlotModal);
-        const unteamed = slotStudents.filter(s => !s.teamId);
+        const unteamed = slotStudents.filter(s => !s.teamId || s.team?.name === `${s.name} (Individual)`);
         const teamsMap: Record<string, typeof slotStudents> = {};
         slotStudents.forEach(s => {
-          if (s.team?.name) {
+          if (s.team?.name && s.team.name !== `${s.name} (Individual)`) {
             if (!teamsMap[s.team?.name]) teamsMap[s.team?.name] = [];
             teamsMap[s.team?.name].push(s);
           }
