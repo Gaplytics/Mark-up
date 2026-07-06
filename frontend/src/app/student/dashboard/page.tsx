@@ -25,19 +25,35 @@ const renderVideoEmbed = (link: string) => {
   }
   
   // Google Drive embed
-  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const driveMatch = link.match(/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?.*id=)([a-zA-Z0-9_-]+)/i);
   if (driveMatch && driveMatch[1]) {
     return (
       <iframe 
         src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
         width="100%" 
-        height="315" 
+        height="360" 
         allow="autoplay"
         style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
       ></iframe>
     );
   }
   
+  // Instagram Reels/Posts embed
+  const igMatch = link.match(/instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)/i);
+  if (igMatch && igMatch[1]) {
+    return (
+      <iframe
+        src={`https://www.instagram.com/reel/${igMatch[1]}/embed`}
+        width="100%"
+        height="450"
+        frameBorder="0"
+        scrolling="no"
+        allowTransparency
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+
   // Direct MP4
   if (link.toLowerCase().endsWith('.mp4')) {
     return (
@@ -113,23 +129,23 @@ export default function StudentDashboardPage() {
     let localWarningCount = 0;
     let lastViolationTime = 0;
 
-    const handleViolation = () => {
+    const handleViolation = (reason: string = "Proctoring violation detected") => {
       if (isDisqualified) return;
       
       const now = Date.now();
-      if (now - lastViolationTime < 1000) return; // Debounce to prevent double-counting from simultaneous events
+      if (now - lastViolationTime < 1000) return; // Debounce simultaneous events
       lastViolationTime = now;
 
       localWarningCount++;
       
       if (localWarningCount > 3) {
         setIsDisqualified(true);
-        addToast("You have been disqualified for repeatedly violating proctoring rules.", "error", "Disqualified — ");
-        handleSubmitTest(false, 0);
+        addToast(`Disqualified: ${reason}. Exceeded 3 warnings.`, "error", "Disqualified — ");
+        handleSubmitTest(false, 0, true, `Disqualified: Exceeded 3 warnings (${reason})`);
       } else {
-        addToast(`Warning ${localWarningCount}/3: Do not switch tabs or exit fullscreen! You will be disqualified after 3 warnings.`, "error", "Proctoring Warning — ");
+        addToast(`Warning ${localWarningCount}/3: ${reason}! Violation recorded.`, "error", "Proctoring Warning — ");
         
-        // Attempt to re-enter fullscreen if they exited
+        // Attempt to re-enter fullscreen if exited
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
           setTimeout(() => {
             document.documentElement.requestFullscreen().catch(() => {});
@@ -138,68 +154,218 @@ export default function StudentDashboardPage() {
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden) handleViolation();
-    };
-    const handleBlur = () => { handleViolation(); };
-    const handlePreventDefault = (e: Event) => { e.preventDefault(); };
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) handleViolation();
+    // 1. Mouse Event Handlers
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      handleViolation("Right-click / Context menu prohibited");
     };
 
+    const handleAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) { // Middle click
+        e.preventDefault();
+        handleViolation("Middle-click / Wheel click prohibited");
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      const examContainer = document.getElementById("exam-container");
+      if (examContainer && !examContainer.contains(e.target as Node)) {
+        handleViolation("Click outside exam window prohibited");
+      }
+    };
+
+    // 2. Keyboard Event Handler
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent F12
-      if (e.key === "F12" || e.keyCode === 123) {
+      const key = e.key.toLowerCase();
+      const code = e.code;
+
+      // Function Keys (F1 - F12)
+      if (code.startsWith("F") && !isNaN(Number(code.replace("F", "")))) {
         e.preventDefault();
-        addToast("DevTools shortcut is blocked during the exam.", "error", "Proctoring Alert — ");
+        e.stopPropagation();
+        handleViolation(`Function key ${code} shortcut restricted`);
         return;
       }
-      // Prevent Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
-      if (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C" || e.key === "i" || e.key === "j" || e.key === "c" || e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) {
+
+      // PrintScreen / Screenshots
+      if (key === "printscreen" || code === "PrintScreen" || (e.shiftKey && key === "s" && (e.metaKey || e.ctrlKey))) {
         e.preventDefault();
-        addToast("DevTools shortcut is blocked during the exam.", "error", "Proctoring Alert — ");
+        e.stopPropagation();
+        handleViolation("Screenshot / PrintScreen shortcut attempt detected");
         return;
       }
-      // Prevent Ctrl+U (View Source)
-      if (e.ctrlKey && (e.key === "u" || e.key === "U" || e.keyCode === 85)) {
+
+      // Alt Shortcuts (Alt+Tab, Alt+F4, Alt+Esc, Alt+Left/Right navigation)
+      if (e.altKey) {
         e.preventDefault();
-        addToast("Viewing page source is blocked during the exam.", "error", "Proctoring Alert — ");
+        e.stopPropagation();
+        handleViolation("Alt-key shortcut restricted (App Switch / Navigation / Window action)");
         return;
       }
-      // Prevent F5 & Ctrl+R (Reload)
-      if (e.key === "F5" || e.keyCode === 116 || (e.ctrlKey && (e.key === "r" || e.key === "R" || e.keyCode === 82))) {
+
+      // Windows / Meta / OS Key Shortcuts
+      if (e.metaKey || key === "meta" || key === "os") {
         e.preventDefault();
-        addToast("Refreshing the page during the exam is blocked.", "error", "Proctoring Alert — ");
+        e.stopPropagation();
+        handleViolation("Windows / System shortcut restricted");
         return;
       }
+
+      // Ctrl / Cmd Combinations
+      if (e.ctrlKey || e.metaKey) {
+        const restrictedCtrlKeys = ["c", "v", "x", "a", "z", "y", "t", "w", "n", "r", "l", "d", "j", "h", "f", "k", "u", "s", "p"];
+        if (restrictedCtrlKeys.includes(key)) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleViolation(`Ctrl+${key.toUpperCase()} shortcut restricted`);
+          return;
+        }
+
+        if (e.shiftKey) {
+          const restrictedCtrlShiftKeys = ["i", "j", "c", "n", "s", "tab"];
+          if (restrictedCtrlShiftKeys.includes(key)) {
+            e.preventDefault();
+            e.stopPropagation();
+            handleViolation(`Ctrl+Shift+${key.toUpperCase()} shortcut restricted`);
+            return;
+          }
+        }
+
+        if (key === "tab" || key === "escape" || key === "insert") {
+          e.preventDefault();
+          e.stopPropagation();
+          handleViolation(`Ctrl+${key} shortcut restricted`);
+          return;
+        }
+      }
+
+      // Shift + Insert (Paste)
+      if (e.shiftKey && key === "insert") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Shift+Insert shortcut restricted");
+        return;
+      }
+
+      // Escape Key (Leaving Fullscreen)
+      if (key === "escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleViolation("Escape key / Fullscreen exit attempt");
+        return;
+      }
+    };
+
+    // 3. Clipboard & Drag/Drop
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      handleViolation("Copying text prohibited");
+    };
+
+    const handleCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      handleViolation("Cutting text prohibited");
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      handleViolation("Pasting text prohibited");
+    };
+
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+      handleViolation("Drag & Drop text/files prohibited");
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      handleViolation("Drag & Drop text/files prohibited");
+    };
+
+    const handleSelectStart = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target && target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
+        e.preventDefault();
+      }
+    };
+
+    // 4. Browser Window & Visibility Events
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleViolation("Tab switched or window minimized");
+      }
+    };
+
+    const handleBlur = () => {
+      handleViolation("Exam window lost focus (Window Blur / App Switch)");
+    };
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        handleViolation("Exited Fullscreen Mode");
+      }
+    };
+
+    const handleResize = () => {
+      if (!document.fullscreenElement) {
+        handleViolation("Window resized / Exited Fullscreen");
+      }
+    };
+
+    const handleOffline = () => {
+      handleViolation("Internet network connection lost");
+    };
+
+    const handleOnline = () => {
+      addToast("Network reconnected.", "success");
     };
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "Are you sure you want to exit the exam? Your progress will be lost.";
+      handleViolation("Navigating away or closing exam tab");
       return e.returnValue;
     };
 
+    // Attach all event listeners
     window.addEventListener("blur", handleBlur);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    document.addEventListener("copy", handlePreventDefault);
-    document.addEventListener("cut", handlePreventDefault);
-    document.addEventListener("paste", handlePreventDefault);
-    document.addEventListener("contextmenu", handlePreventDefault);
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
     window.addEventListener("beforeunload", handleBeforeUnload);
+    
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("auxclick", handleAuxClick);
+    document.addEventListener("click", handleClick);
+    document.addEventListener("copy", handleCopy);
+    document.addEventListener("cut", handleCut);
+    document.addEventListener("paste", handlePaste);
+    document.addEventListener("dragstart", handleDragStart);
+    document.addEventListener("drop", handleDrop);
+    document.addEventListener("selectstart", handleSelectStart);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
 
     return () => {
       window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      document.removeEventListener("copy", handlePreventDefault);
-      document.removeEventListener("cut", handlePreventDefault);
-      document.removeEventListener("paste", handlePreventDefault);
-      document.removeEventListener("contextmenu", handlePreventDefault);
-      document.removeEventListener("fullscreenchange", handleFullscreenChange);
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("auxclick", handleAuxClick);
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("cut", handleCut);
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("dragstart", handleDragStart);
+      document.removeEventListener("drop", handleDrop);
+      document.removeEventListener("selectstart", handleSelectStart);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizStarted, examFinished, isDisqualified]);
@@ -216,6 +382,49 @@ export default function StudentDashboardPage() {
 
   if (!activeStudent) return null;
 
+  const checkIsSlotActive = (label: string | undefined): { isActive: boolean; reason?: string } => {
+    if (!label) return { isActive: false, reason: "No slot assigned" };
+    
+    try {
+      const cleanLabel = label.replace(/[\u2012\u2013\u2014-]/g, "-");
+      const parts = cleanLabel.split("-");
+      if (parts.length !== 2) return { isActive: false, reason: "Invalid slot format" };
+
+      const parseTimeToMinutes = (timeStr: string) => {
+        const match = timeStr.trim().match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return null;
+        let h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const isPM = match[3].toUpperCase() === "PM";
+        if (h === 12 && !isPM) h = 0;
+        if (h !== 12 && isPM) h += 12;
+        return h * 60 + m;
+      };
+
+      const startMinutes = parseTimeToMinutes(parts[0]);
+      const endMinutes = parseTimeToMinutes(parts[1]);
+
+      if (startMinutes === null || endMinutes === null) {
+        return { isActive: false, reason: "Unable to parse slot time" };
+      }
+
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      if (currentMinutes < startMinutes) {
+        return { isActive: false, reason: "Before slot time" };
+      }
+      if (currentMinutes > endMinutes) {
+        return { isActive: false, reason: "After slot time" };
+      }
+
+      return { isActive: true };
+    } catch (err) {
+      console.error("Error checking slot activity:", err);
+      return { isActive: false, reason: "Error parsing slot" };
+    }
+  };
+
   const selectRandomQuestion = (diff: string, excluded: Set<string>) => {
     const pool = dbQuestions.filter(q => 
       q.Difficulty?.toLowerCase() === diff.toLowerCase() && !excluded.has(q.Question)
@@ -230,9 +439,16 @@ export default function StudentDashboardPage() {
       return;
     }
 
+    const slotLabel = slotInfo(activeStudent.slotId).slot?.label;
+    const slotStatus = checkIsSlotActive(slotLabel);
+    if (!slotStatus.isActive) {
+      addToast(`Access Denied: You can only take the test during your slot (${slotLabel || "Unassigned"}).`, "error", "Access denied — ");
+      return;
+    }
+
     setIsLoadingQuestions(true);
     try {
-      const res = await fetch("http://localhost:3001/api/questions");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/questions`);
       const json = await res.json();
       if (!json.success) throw new Error("Failed to load questions");
       if (!json.data || json.data.length === 0) {
@@ -295,18 +511,22 @@ export default function StudentDashboardPage() {
     setQuizAnswers({ ...quizAnswers, [questionIdx]: optionIdx });
   };
 
-  function handleSubmitTest(isTimeout = false, finalScore?: number) {
+  function handleSubmitTest(isTimeout = false, finalScore?: number, proctoringFlagged = false, proctoringNote?: string) {
     if (!currentStudent) return;
     const scoreToSave = finalScore !== undefined ? finalScore : testScore;
+    const flagged = proctoringFlagged || isDisqualified;
+    const note = proctoringNote || (isDisqualified ? "Disqualified due to proctoring violations" : null);
 
     // Send score to backend to insert into Supabase scores table
-    fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-score`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${currentStudent.studentId}/submit-score`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         score: scoreToSave,
         round: "round1",
-        total_questions: 30
+        total_questions: 30,
+        proctoring_flagged: flagged,
+        proctoring_note: note
       })
     })
     .then(res => res.json())
@@ -451,7 +671,7 @@ export default function StudentDashboardPage() {
     if (!currentStudent) return;
 
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${currentStudent.studentId}/submit-round`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${currentStudent.studentId}/submit-round`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roundKey, link, note })
@@ -635,70 +855,102 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (
-                  <div className="card card-pad" style={{ maxWidth: "600px", margin: "0 auto" }}>
-                    <div className="section-title" style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>Exam Instructions & Rules</div>
-                    <div className="section-desc" style={{ marginBottom: "20px" }}>Please read the following instructions carefully before starting the exam.</div>
-                    
-                    <div style={{ 
-                      padding: "16px", 
-                      border: "1px solid var(--line)", 
-                      borderRadius: "10px", 
-                      background: "#FCFBFA", 
-                      marginBottom: "20px",
-                      textAlign: "left"
-                    }}>
-                      <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", color: "var(--slate-1)" }}>
-                        🕒 Your slot: <b>{slotInfo(activeStudent.slotId).slot?.label}</b>
-                      </div>
+                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (() => {
+                  const slotLabel = slotInfo(activeStudent.slotId).slot?.label;
+                  const slotStatus = checkIsSlotActive(slotLabel);
+
+                  return (
+                    <div className="card card-pad" style={{ maxWidth: "600px", margin: "0 auto" }}>
+                      <div className="section-title" style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "8px" }}>Exam Instructions & Rules</div>
+                      <div className="section-desc" style={{ marginBottom: "20px" }}>Please read the following instructions carefully before starting the exam.</div>
                       
-                      <ul style={{ 
-                        fontSize: "13px", 
-                        lineHeight: "1.6", 
-                        color: "var(--slate-1)", 
-                        paddingLeft: "20px",
-                        margin: 0
+                      {!slotStatus.isActive && (
+                        <div style={{ 
+                          padding: "14px 18px", 
+                          background: "#FEF2F2", 
+                          border: "1px solid #FCA5A5", 
+                          borderRadius: "10px", 
+                          color: "#991B1B", 
+                          fontSize: "13.5px", 
+                          fontWeight: "500",
+                          marginBottom: "20px",
+                          textAlign: "left",
+                          lineHeight: "1.5"
+                        }}>
+                          ⚠️ <b>Slot Inactive:</b> You can only take this test during your assigned slot time (<b>{slotLabel || "Unassigned"}</b>). 
+                          {slotStatus.reason === "Before slot time" ? " Your slot has not started yet." : " Your slot session has already ended."}
+                        </div>
+                      )}
+
+                      <div style={{ 
+                        padding: "16px", 
+                        border: "1px solid var(--line)", 
+                        borderRadius: "10px", 
+                        background: "#FCFBFA", 
+                        marginBottom: "20px",
+                        textAlign: "left",
+                        opacity: slotStatus.isActive ? 1 : 0.6
                       }}>
-                        <li style={{ marginBottom: "8px" }}>📝 <b>Format:</b> There will be exactly <b>30 questions</b>.</li>
-                        <li style={{ marginBottom: "8px" }}>⏱️ <b>Duration:</b> You have <b>40 minutes</b> to complete the test (strict auto-submission).</li>
-                        <li style={{ marginBottom: "8px" }}>🚫 <b>No Backtracking:</b> After answering a question, you <b>cannot go back</b> to review or change it.</li>
-                        <li style={{ marginBottom: "8px" }}>✅ <b>Marking:</b> There is <b>no negative marking</b>.</li>
-                        <li style={{ marginBottom: "8px" }}>⚠️ <b>Proctoring:</b> Your Camera and Microphone must be turned <b>ON</b>. The system monitors your hardware status continuously.</li>
-                        <li style={{ marginBottom: "8px" }}>🚨 <b>Disqualification:</b> You will be automatically disqualified if you attempt to cheat (e.g. switching tabs, minimizing browser, or having other people in the room).</li>
-                      </ul>
+                        <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", color: "var(--slate-1)" }}>
+                          🕒 Your slot: <b>{slotLabel || "Unassigned"}</b>
+                        </div>
+                        
+                        <ul style={{ 
+                          fontSize: "13px", 
+                          lineHeight: "1.6", 
+                          color: "var(--slate-1)", 
+                          paddingLeft: "20px",
+                          margin: 0
+                        }}>
+                          <li style={{ marginBottom: "8px" }}>📝 <b>Format:</b> There will be exactly <b>30 questions</b>.</li>
+                          <li style={{ marginBottom: "8px" }}>⏱️ <b>Duration:</b> You have <b>40 minutes</b> to complete the test (strict auto-submission).</li>
+                          <li style={{ marginBottom: "8px" }}>🚫 <b>No Backtracking:</b> After answering a question, you <b>cannot go back</b> to review or change it.</li>
+                          <li style={{ marginBottom: "8px" }}>✅ <b>Marking:</b> There is <b>no negative marking</b>.</li>
+                          <li style={{ marginBottom: "8px" }}>⚠️ <b>Proctoring:</b> Your Camera and Microphone must be turned <b>ON</b>. The system monitors your hardware status continuously.</li>
+                          <li style={{ marginBottom: "8px" }}>🚨 <b>Disqualification:</b> You will be automatically disqualified if you attempt to cheat (e.g. switching tabs, minimizing browser, or having other people in the room).</li>
+                        </ul>
+                      </div>
+
+                      <label style={{ 
+                        display: "flex", 
+                        alignItems: "flex-start", 
+                        gap: "10px", 
+                        fontSize: "13px", 
+                        color: "var(--slate-1)",
+                        cursor: slotStatus.isActive ? "pointer" : "not-allowed",
+                        marginBottom: "22px",
+                        textAlign: "left",
+                        opacity: slotStatus.isActive ? 1 : 0.5
+                      }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isAcknowledged} 
+                          onChange={(e) => {
+                            if (slotStatus.isActive) setIsAcknowledged(e.target.checked);
+                          }} 
+                          style={{ marginTop: "3px" }}
+                          disabled={!slotStatus.isActive}
+                        />
+                        <span>I acknowledge that I have read the rules and agree to keep my camera/microphone active during the exam. I understand that violating these rules will lead to immediate disqualification.</span>
+                      </label>
+
+                      <button 
+                        className="btn btn-coral btn-block" 
+                        onClick={handleStartTest} 
+                        disabled={isLoadingQuestions || !isAcknowledged || !slotStatus.isActive}
+                        style={{
+                          opacity: (isLoadingQuestions || !isAcknowledged || !slotStatus.isActive) ? 0.5 : 1,
+                          cursor: (isLoadingQuestions || !isAcknowledged || !slotStatus.isActive) ? "not-allowed" : "pointer"
+                        }}
+                      >
+                        {isLoadingQuestions ? "Preparing exam & requesting media access..." : "Start test"}
+                      </button>
                     </div>
-
-                    <label style={{ 
-                      display: "flex", 
-                      alignItems: "flex-start", 
-                      gap: "10px", 
-                      fontSize: "13px", 
-                      color: "var(--slate-1)",
-                      cursor: "pointer",
-                      marginBottom: "22px",
-                      textAlign: "left"
-                    }}>
-                      <input 
-                        type="checkbox" 
-                        checked={isAcknowledged} 
-                        onChange={(e) => setIsAcknowledged(e.target.checked)} 
-                        style={{ marginTop: "3px" }}
-                      />
-                      <span>I acknowledge that I have read the rules and agree to keep my camera/microphone active during the exam. I understand that violating these rules will lead to immediate disqualification.</span>
-                    </label>
-
-                    <button 
-                      className="btn btn-coral btn-block" 
-                      onClick={handleStartTest} 
-                      disabled={isLoadingQuestions || !isAcknowledged}
-                    >
-                      {isLoadingQuestions ? "Preparing exam & requesting media access..." : "Start test"}
-                    </button>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {rounds.round1 !== "not-started" && activeStudent.r1Score === null && quizStarted && !examFinished && !isDisqualified && (
-                  <div className="card card-pad">
+                  <div className="card card-pad" id="exam-container">
                     <style>{`
                       @keyframes pulse {
                         0% { opacity: 0.3; }

@@ -25,19 +25,35 @@ const renderVideoEmbed = (link: string) => {
   }
   
   // Google Drive embed
-  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const driveMatch = link.match(/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?.*id=)([a-zA-Z0-9_-]+)/i);
   if (driveMatch && driveMatch[1]) {
     return (
       <iframe 
         src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
         width="100%" 
-        height="315" 
+        height="360" 
         allow="autoplay"
         style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
       ></iframe>
     );
   }
   
+  // Instagram Reels/Posts embed
+  const igMatch = link.match(/instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)/i);
+  if (igMatch && igMatch[1]) {
+    return (
+      <iframe
+        src={`https://www.instagram.com/reel/${igMatch[1]}/embed`}
+        width="100%"
+        height="450"
+        frameBorder="0"
+        scrolling="no"
+        allowTransparency
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+
   // Direct MP4
   if (link.toLowerCase().endsWith('.mp4')) {
     return (
@@ -92,7 +108,7 @@ const StarRating = ({ value, onChange, label }: { value: number; onChange: (v: n
 
 export default function JuryDashboardPage() {
   const router = useRouter();
-  const { students, setStudents, currentJury, setCurrentJury, addToast } = useStateContext();
+  const { students, setStudents, currentJury, setCurrentJury, addToast, slots } = useStateContext();
   
   const [juryTab, setJuryTab] = useState("overview");
   const [juryScores, setJuryScores] = useState<Record<string, number>>({});
@@ -130,7 +146,7 @@ export default function JuryDashboardPage() {
 
   const handleJurySubmissionAction = (sid: string, roundKey: "round2" | "round3", status: "approved" | "rejected") => {
     // Sync to Supabase
-    fetch(`http://localhost:3001/api/students/${sid}/jury-review`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${sid}/jury-review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roundKey, status })
@@ -174,7 +190,7 @@ export default function JuryDashboardPage() {
     }
 
     // Sync to Supabase
-    fetch(`http://localhost:3001/api/students/${sid}/jury-review`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${sid}/jury-review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roundKey, score: val })
@@ -261,6 +277,9 @@ export default function JuryDashboardPage() {
               <div>
                 <div className="u-name">{currentJury.name}</div>
                 <div className="u-role">SOB Faculty Jury</div>
+                <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>
+                  {currentJury.slotId || currentJury.slot_id ? (slots.find(s => s.id === (currentJury.slotId || currentJury.slot_id))?.label || "Assigned Slot") : "All Slots"}
+                </div>
               </div>
             </div>
             <div className="side-link" onClick={handleLogout} style={{ marginTop: 6, cursor: "pointer" }}>
@@ -269,7 +288,7 @@ export default function JuryDashboardPage() {
           </div>
         </div>
 
-        {/* Main Area */}
+        {/* Main Area thing*/}
         <div className="main">
           <div className="topbar">
             <div>
@@ -342,8 +361,8 @@ export default function JuryDashboardPage() {
                           <tr key={s.id}>
                             <td><b>{s.name}</b></td>
                             <td>{s.college}</td>
-                            <td>{s.r1Score !== null ? "Tested" : "Pending"}</td>
-                            <td>{s.r1Score !== null ? s.r1Score.toFixed(1) + " / 10.0" : "—"}</td>
+                            <td>{s.proctoringFlagged ? <span className="badge badge-coral" title={s.proctoringNote || "Disqualified"}>Disqualified</span> : (s.r1Score !== null ? "Tested" : "Pending")}</td>
+                            <td>{s.r1Score !== null ? (s.r1Score / 3).toFixed(1) + " / 10.0" : "—"}</td>
                           </tr>
                         );
                       })}
@@ -358,8 +377,16 @@ export default function JuryDashboardPage() {
               const roundKey = juryTab as "round2" | "round3";
               const label = roundKey === "round2" ? "90-Sec Reel" : "60-Sec Demo Day Film";
               
-              // Filter to show only candidates who have submitted
-              const submittedCandidates = students.filter(s => s[roundKey]?.status !== "not-submitted");
+              const assignedSlotId = currentJury.slotId || currentJury.slot_id;
+
+              // Filter to show only candidates who have submitted & belong to assigned slot
+              const submittedCandidates = students.filter(s => {
+                if (s[roundKey]?.status === "not-submitted") return false;
+                if (assignedSlotId && assignedSlotId !== "all") {
+                  return s.slotId === assignedSlotId;
+                }
+                return true;
+              });
               
               if (submittedCandidates.length === 0) {
                 return (
@@ -410,7 +437,7 @@ export default function JuryDashboardPage() {
                 }
                 
                 try {
-                  const res = await fetch(`http://localhost:3001/api/students/${s.id}/jury-review`, {
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${s.id}/jury-review`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ roundKey, score: averageScore, status: "approved" })

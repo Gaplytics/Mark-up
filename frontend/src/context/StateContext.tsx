@@ -30,6 +30,8 @@ export interface Student {
   team: Team | null;
   round1Status: "not-started" | "in-progress" | "submitted";
   r1Score: number | null;
+  proctoringFlagged?: boolean;
+  proctoringNote?: string | null;
   round2: RoundSubmission;
   round3: RoundSubmission;
 }
@@ -40,6 +42,8 @@ export interface Judge {
   email: string;
   dept: string;
   collegeId?: string;
+  slotId?: string | null;
+  slot_id?: string | null;
 }
 
 export interface Slot {
@@ -167,7 +171,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
     const fetchRounds = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/college-settings/${encodeURIComponent(targetCollegeId)}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/college-settings/${encodeURIComponent(targetCollegeId)}`);
         const json = await res.json();
         if (json.success && json.data) {
           setRounds({
@@ -199,7 +203,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchJudges = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/judges");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
         const json = await res.json();
         if (json.success) {
           setJudges(json.data);
@@ -214,7 +218,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchSlots = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/slots");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/slots`);
         const json = await res.json();
         if (json.success) {
           const parseTime = (label: string) => {
@@ -243,7 +247,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/students?college_id=${encodeURIComponent(targetCollegeId)}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students?college_id=${encodeURIComponent(targetCollegeId)}`);
         const json = await res.json();
         if (json.success) {
           // Map DB snake_case fields back to camelCase
@@ -259,6 +263,8 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             team: s.team || null,
             round1Status: s.round1_status || "not-started",
             r1Score: s.r1_score,
+            proctoringFlagged: Boolean(s.proctoring_flagged),
+            proctoringNote: s.proctoring_note || null,
             round2: { status: s.round2_status || "not-submitted", link: s.r2_link || "", note: s.r2_note || "", juryScore: s.r2_score || null }, 
             round3: { status: s.round3_status || "not-submitted", link: s.r3_link || "", note: s.r3_note || "", juryScore: s.r3_score || null },
           }));
@@ -281,7 +287,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
   const studentAverage = (s: Student) => {
     const scores: number[] = [];
-    if (s.r1Score !== null) scores.push(s.r1Score);
+    if (s.r1Score !== null) scores.push(s.r1Score / 3);
     if (s.round2.juryScore !== null) scores.push(s.round2.juryScore);
     if (s.round3.juryScore !== null) scores.push(s.round3.juryScore);
     if (scores.length === 0) return 0;

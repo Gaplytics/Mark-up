@@ -28,19 +28,35 @@ const renderVideoEmbed = (link: string) => {
   }
   
   // Google Drive embed
-  const driveMatch = link.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const driveMatch = link.match(/(?:drive|docs)\.google\.com\/(?:file\/d\/|open\?.*id=)([a-zA-Z0-9_-]+)/i);
   if (driveMatch && driveMatch[1]) {
     return (
       <iframe 
         src={`https://drive.google.com/file/d/${driveMatch[1]}/preview`} 
         width="100%" 
-        height="300" 
+        height="360" 
         allow="autoplay"
         style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
       ></iframe>
     );
   }
   
+  // Instagram Reels/Posts embed
+  const igMatch = link.match(/instagram\.com\/(?:reel|p)\/([a-zA-Z0-9_-]+)/i);
+  if (igMatch && igMatch[1]) {
+    return (
+      <iframe
+        src={`https://www.instagram.com/reel/${igMatch[1]}/embed`}
+        width="100%"
+        height="450"
+        frameBorder="0"
+        scrolling="no"
+        allowTransparency
+        style={{ borderRadius: "8px", marginTop: "12px", border: "none" }}
+      ></iframe>
+    );
+  }
+
   // Direct MP4
   if (link.toLowerCase().endsWith('.mp4')) {
     return (
@@ -113,7 +129,7 @@ export default function CollegeDashboardPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:3001/api/students", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -164,7 +180,7 @@ export default function CollegeDashboardPage() {
     const id = studentToRemove;
     setIsProcessing(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${id}`, {
         method: "DELETE"
       });
       const data = await res.json();
@@ -195,7 +211,7 @@ export default function CollegeDashboardPage() {
     if (ids.length === 0) return;
     setIsProcessing(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/students/bulk-delete`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/bulk-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids })
@@ -312,7 +328,7 @@ export default function CollegeDashboardPage() {
         if (addedCount > 0) {
           const itemsToSave = newStudents.slice(newStudents.length - addedCount);
           try {
-            const res = await fetch("http://localhost:3001/api/students/bulk", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/bulk`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ students: itemsToSave.map(s => ({
@@ -387,6 +403,7 @@ export default function CollegeDashboardPage() {
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeEmail, setNewJudgeEmail] = useState("");
   const [newJudgeDept, setNewJudgeDept] = useState("");
+  const [newJudgeSlot, setNewJudgeSlot] = useState("");
 
   const handleAddJudge = async () => {
     if (!newJudgeName.trim() || !newJudgeEmail.trim()) {
@@ -400,7 +417,7 @@ export default function CollegeDashboardPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:3001/api/judges", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -408,6 +425,7 @@ export default function CollegeDashboardPage() {
           email: newJudgeEmail.trim().toLowerCase(),
           dept: newJudgeDept.trim() || "Marketing",
           college_id: collegeAdminId,
+          slot_id: newJudgeSlot || null,
         }),
       });
 
@@ -418,9 +436,10 @@ export default function CollegeDashboardPage() {
         setNewJudgeName("");
         setNewJudgeEmail("");
         setNewJudgeDept("");
+        setNewJudgeSlot("");
         
         // Refresh judges list from database
-        const freshRes = await fetch("http://localhost:3001/api/judges");
+        const freshRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
         const freshJson = await freshRes.json();
         if (freshJson.success) {
           setJudges(freshJson.data);
@@ -439,7 +458,7 @@ export default function CollegeDashboardPage() {
     setJudgeToRemove(null); // close modal immediately for snappy UI
     
     try {
-      const res = await fetch(`http://localhost:3001/api/judges/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges/${id}`, {
         method: "DELETE"
       });
       const json = await res.json();
@@ -458,12 +477,12 @@ export default function CollegeDashboardPage() {
     const newRounds = { ...rounds, [roundKey]: "live" };
     setRounds(newRounds as any);
     if (roundKey === "round1") {
-      setStudents(students.map(s => ({ ...s, round1Status: "in-progress" })));
+      setStudents(students.map(s => s.round1Status === "submitted" ? s : { ...s, round1Status: "in-progress" }));
     }
     addToast("Students can now begin " + roundKey.replace("round", "Round "), "success", "Round flagged off — ");
     
     try {
-      await fetch(`http://localhost:3001/api/college-settings/${collegeAdminId}`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/college-settings/${collegeAdminId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -483,7 +502,7 @@ export default function CollegeDashboardPage() {
     addToast(roundKey.replace("round", "Round ") + " is now closed for submissions.", "success");
     
     try {
-      await fetch(`http://localhost:3001/api/college-settings/${collegeAdminId}`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/college-settings/${collegeAdminId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -508,8 +527,8 @@ export default function CollegeDashboardPage() {
         .map((r, i) => [
           `#${i + 1}`,
           r.s.name,
-          r.s.r1Score !== null ? "Tested" : "—",
-          r.s.r1Score !== null ? r.s.r1Score.toFixed(1) : "—",
+          r.s.proctoringFlagged ? "Disqualified" : (r.s.r1Score !== null ? "Tested" : "—"),
+          r.s.r1Score !== null ? (r.s.r1Score / 3).toFixed(1) : "—",
           r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : (r.s.round2.status === "pending" ? "Pending" : "Not submitted"),
           r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : (r.s.round3.status === "pending" ? "Pending" : "Not submitted"),
           r.avg.toFixed(1)
@@ -769,13 +788,13 @@ export default function CollegeDashboardPage() {
                                         }
                                       }
                                       for (const [gName, sids] of Object.entries(fillUpsByTeam)) {
-                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: sids, teamName: gName }) });
+                                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: sids, teamName: gName }) });
                                         const json = await res.json();
                                         if (!json.success) throw new Error(json.error);
                                       }
                                       // Save new teams
                                       for (const team of newTeams) {
-                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: team.ids, teamName: team.name }) });
+                                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: team.ids, teamName: team.name }) });
                                         const json = await res.json();
                                         if (!json.success) throw new Error(json.error);
                                       }
@@ -792,7 +811,7 @@ export default function CollegeDashboardPage() {
                                       }
                                       // Send team notification emails
                                       try {
-                                        await fetch("http://localhost:3001/api/teams/notify", {
+                                        await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/teams/notify`, {
                                           method: "POST",
                                           headers: { "Content-Type": "application/json" },
                                           body: JSON.stringify({ slotId: slot.id }),
@@ -835,15 +854,15 @@ export default function CollegeDashboardPage() {
                   <div className="card card-pad">
                     <div className="section-title">Add a student manually</div>
                     <div className="section-desc">Phone numbers are how students will sign in with OTP.</div>
-                    <div className="form-team">
+                    <div className="form-group">
                       <label>Full Name</label>
                       <input className="input" placeholder="e.g. Aarav Sharma" value={newStudent.name} onChange={(e) => setNewStudent({...newStudent, name: e.target.value})} />
                     </div>
-                    <div className="form-team">
+                    <div className="form-group">
                       <label>Email Address</label>
                       <input className="input" placeholder="student@example.com" value={newStudent.email} onChange={(e) => setNewStudent({...newStudent, email: e.target.value})} />
                     </div>
-                    <div className="form-team">
+                    <div className="form-group">
                       <label>Mobile Number</label>
                       <input 
                         className="input" 
@@ -969,7 +988,7 @@ export default function CollegeDashboardPage() {
               const handleDisbandTeam = async (teamName: string, memberIds: string[]) => {
                 setIsProcessing(true);
                 try {
-                  const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ studentIds: memberIds, teamName: null })
@@ -1045,7 +1064,7 @@ export default function CollegeDashboardPage() {
                     }
                   }
                   for (const [gName, sids] of Object.entries(fillUpsByTeam)) {
-                    const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ studentIds: sids, teamName: gName }),
@@ -1055,7 +1074,7 @@ export default function CollegeDashboardPage() {
                   }
                   // Save new teams
                   for (const team of newTeams) {
-                    const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ studentIds: team.ids, teamName: team.name }),
@@ -1077,7 +1096,7 @@ export default function CollegeDashboardPage() {
                   }
                   // Send team notification emails
                   try {
-                    await fetch("http://localhost:3001/api/teams/notify", {
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/teams/notify`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ slotId: teamFormationSlot }),
@@ -1160,37 +1179,54 @@ export default function CollegeDashboardPage() {
                 <div className="card card-pad">
                   <div className="section-title">Appoint a judge</div>
                   <div className="section-desc">Add School of Business faculty to the jury panel for this contest.</div>
-                  <div className="form-team">
+                  <div className="form-group">
                     <label>Full name</label>
                     <input className="input" placeholder="Dr. Full Name" value={newJudgeName} onChange={(e) => setNewJudgeName(e.target.value)} />
                   </div>
-                  <div className="form-team">
+                  <div className="form-group">
                     <label>Email</label>
                     <input className="input" placeholder="name@alliance.edu.in" value={newJudgeEmail} onChange={(e) => setNewJudgeEmail(e.target.value)} />
                   </div>
-                  <div className="form-team">
+                  <div className="form-group">
                     <label>Department</label>
                     <input className="input" placeholder="e.g. Marketing" value={newJudgeDept} onChange={(e) => setNewJudgeDept(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Assigned Slot (to review submissions)</label>
+                    <select className="input" value={newJudgeSlot} onChange={(e) => setNewJudgeSlot(e.target.value)}>
+                      <option value="">All Slots (Review all teams)</option>
+                      {slots.map(s => (
+                        <option key={s.id} value={s.id}>{s.label}</option>
+                      ))}
+                    </select>
                   </div>
                   <button className="btn btn-coral btn-block" onClick={handleAddJudge}>Appoint judge</button>
                 </div>
 
                 <div className="card card-pad">
                   <div className="section-title">Jury panel ({judges.length})</div>
-                  <div className="section-desc">Each judge gets login access to review and score submissions.</div>
+                  <div className="section-desc">Each judge gets login access to review and score submissions for their assigned slot.</div>
                   <div className="stack">
-                    {judges.map(j => (
-                      <div key={j.id} className="row-between" style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 10 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          <div className="avatar" style={{ background: "var(--navy-2)" }}>{initials(j.name)}</div>
-                          <div>
-                            <div style={{ fontSize: 13.5, fontWeight: 700 }}>{j.name}</div>
-                            <div style={{ fontSize: 12, color: "var(--slate-2)" }}>{j.email} · {j.dept}</div>
+                    {judges.map(j => {
+                      const assignedSlot = slots.find(s => s.id === (j.slotId || j.slot_id));
+                      return (
+                        <div key={j.id} className="row-between" style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 10 }}>
+                          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                            <div className="avatar" style={{ background: "var(--navy-2)", flexShrink: 0 }}>{initials(j.name)}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--navy)" }}>{j.name}</div>
+                                <span className="badge badge-amber" style={{ fontSize: 10, padding: "2px 6px" }}>
+                                  {assignedSlot ? assignedSlot.label : "All Slots"}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: 12, color: "var(--slate-2)" }}>{j.email} · {j.dept}</div>
+                            </div>
                           </div>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setJudgeToRemove(j.id)}>Remove</button>
                         </div>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setJudgeToRemove(j.id)}>Remove</button>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {judges.length === 0 && (
                       <div className="empty">
                         <div className="ico">⚖️</div>
@@ -1298,8 +1334,8 @@ export default function CollegeDashboardPage() {
                                 <b>{r.s.name}</b>
                                 <div style={{ fontSize: 11, color: "var(--slate-2)" }}>{r.s.college}</div>
                               </td>
-                              <td>{r.s.r1Score !== null ? "Tested" : "—"}</td>
-                              <td>{r.s.r1Score !== null ? r.s.r1Score.toFixed(1) : "—"}</td>
+                              <td>{r.s.proctoringFlagged ? <span className="badge badge-coral" title={r.s.proctoringNote || "Disqualified"}>Disqualified</span> : (r.s.r1Score !== null ? "Tested" : "—")}</td>
+                              <td>{r.s.r1Score !== null ? (r.s.r1Score / 3).toFixed(1) : "—"}</td>
                               <td>{r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : <StatusBadge status={r.s.round2.status} />}</td>
                               <td>{r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : <StatusBadge status={r.s.round3.status} />}</td>
                               <td><b>{r.avg.toFixed(1)}</b></td>
