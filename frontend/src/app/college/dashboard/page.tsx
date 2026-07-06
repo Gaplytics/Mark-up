@@ -113,7 +113,7 @@ export default function CollegeDashboardPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:3001/api/students", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -164,7 +164,7 @@ export default function CollegeDashboardPage() {
     const id = studentToRemove;
     setIsProcessing(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/students/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${id}`, {
         method: "DELETE"
       });
       const data = await res.json();
@@ -195,7 +195,7 @@ export default function CollegeDashboardPage() {
     if (ids.length === 0) return;
     setIsProcessing(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/students/bulk-delete`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/bulk-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids })
@@ -312,7 +312,7 @@ export default function CollegeDashboardPage() {
         if (addedCount > 0) {
           const itemsToSave = newStudents.slice(newStudents.length - addedCount);
           try {
-            const res = await fetch("http://localhost:3001/api/students/bulk", {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/bulk`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ students: itemsToSave.map(s => ({
@@ -400,7 +400,7 @@ export default function CollegeDashboardPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:3001/api/judges", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -420,7 +420,7 @@ export default function CollegeDashboardPage() {
         setNewJudgeDept("");
         
         // Refresh judges list from database
-        const freshRes = await fetch("http://localhost:3001/api/judges");
+        const freshRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
         const freshJson = await freshRes.json();
         if (freshJson.success) {
           setJudges(freshJson.data);
@@ -439,7 +439,7 @@ export default function CollegeDashboardPage() {
     setJudgeToRemove(null); // close modal immediately for snappy UI
     
     try {
-      const res = await fetch(`http://localhost:3001/api/judges/${id}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges/${id}`, {
         method: "DELETE"
       });
       const json = await res.json();
@@ -463,7 +463,7 @@ export default function CollegeDashboardPage() {
     addToast("Students can now begin " + roundKey.replace("round", "Round "), "success", "Round flagged off — ");
     
     try {
-      await fetch(`http://localhost:3001/api/college-settings/${collegeAdminId}`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/college-settings/${collegeAdminId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -483,7 +483,7 @@ export default function CollegeDashboardPage() {
     addToast(roundKey.replace("round", "Round ") + " is now closed for submissions.", "success");
     
     try {
-      await fetch(`http://localhost:3001/api/college-settings/${collegeAdminId}`, {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/college-settings/${collegeAdminId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -768,13 +768,13 @@ export default function CollegeDashboardPage() {
                                         }
                                       }
                                       for (const [gName, sids] of Object.entries(fillUpsByTeam)) {
-                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: sids, teamName: gName }) });
+                                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: sids, teamName: gName }) });
                                         const json = await res.json();
                                         if (!json.success) throw new Error(json.error);
                                       }
                                       // Save new teams
                                       for (const team of newTeams) {
-                                        const res = await fetch("http://localhost:3001/api/students/assign-team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: team.ids, teamName: team.name }) });
+                                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ studentIds: team.ids, teamName: team.name }) });
                                         const json = await res.json();
                                         if (!json.success) throw new Error(json.error);
                                       }
@@ -791,7 +791,7 @@ export default function CollegeDashboardPage() {
                                       }
                                       // Send team notification emails
                                       try {
-                                        await fetch("http://localhost:3001/api/teams/notify", {
+                                        await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/teams/notify`, {
                                           method: "POST",
                                           headers: { "Content-Type": "application/json" },
                                           body: JSON.stringify({ slotId: slot.id }),
@@ -968,7 +968,7 @@ export default function CollegeDashboardPage() {
               const handleDisbandTeam = async (teamName: string, memberIds: string[]) => {
                 setIsProcessing(true);
                 try {
-                  const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ studentIds: memberIds, teamName: null })
@@ -1042,7 +1042,7 @@ export default function CollegeDashboardPage() {
                     }
                   }
                   for (const [gName, sids] of Object.entries(fillUpsByTeam)) {
-                    const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ studentIds: sids, teamName: gName }),
@@ -1052,7 +1052,7 @@ export default function CollegeDashboardPage() {
                   }
                   // Save new teams
                   for (const team of newTeams) {
-                    const res = await fetch("http://localhost:3001/api/students/assign-team", {
+                    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/assign-team`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ studentIds: team.ids, teamName: team.name }),
@@ -1074,7 +1074,7 @@ export default function CollegeDashboardPage() {
                   }
                   // Send team notification emails
                   try {
-                    await fetch("http://localhost:3001/api/teams/notify", {
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/teams/notify`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ slotId: teamFormationSlot }),

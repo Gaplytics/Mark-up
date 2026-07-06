@@ -167,7 +167,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
     const fetchRounds = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/college-settings/${encodeURIComponent(targetCollegeId)}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/college-settings/${encodeURIComponent(targetCollegeId)}`);
         const json = await res.json();
         if (json.success && json.data) {
           setRounds({
@@ -199,7 +199,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchJudges = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/judges");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
         const json = await res.json();
         if (json.success) {
           setJudges(json.data);
@@ -214,7 +214,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchSlots = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/slots");
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/slots`);
         const json = await res.json();
         if (json.success) {
           const parseTime = (label: string) => {
@@ -243,7 +243,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
     const fetchStudents = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/students?college_id=${encodeURIComponent(targetCollegeId)}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students?college_id=${encodeURIComponent(targetCollegeId)}`);
         const json = await res.json();
         if (json.success) {
           // Map DB snake_case fields back to camelCase
