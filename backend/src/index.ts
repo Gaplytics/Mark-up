@@ -519,7 +519,7 @@ app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise
   try {
     const { data: student, error } = await supabaseAdmin
       .from('students')
-      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id)')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id, qualified_r3)')
       .eq('email', normalizedEmail)
       .single();
 
@@ -571,7 +571,8 @@ app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise
         team: student.teams ? {
           id: student.teams.id,
           name: student.teams.name,
-          leaderId: student.teams.leader_id
+          leaderId: student.teams.leader_id,
+          qualifiedR3: student.teams.qualified_r3
         } : null,
         round1Status: student.round1_status || "not-started",
         r1Score: student.r1_score,
@@ -628,7 +629,7 @@ app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> =
   try {
     const { data: student, error } = await supabaseAdmin
       .from('students')
-      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id)')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id, qualified_r3)')
       .eq('id', id)
       .maybeSingle();
 
@@ -659,7 +660,8 @@ app.get('/api/students/:id', async (req: Request, res: Response): Promise<any> =
         team: student.teams ? {
           id: student.teams.id,
           name: student.teams.name,
-          leaderId: student.teams.leader_id
+          leaderId: student.teams.leader_id,
+          qualifiedR3: student.teams.qualified_r3
         } : null
       }
     });
@@ -835,7 +837,7 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('students')
-      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id), scores(round, score, proctoring_flagged, proctoring_note)')
+      .select('*, teams:teams!students_team_id_fkey(id, name, leader_id, qualified_r3), scores(round, score, proctoring_flagged, proctoring_note)')
       .eq('college_id', college_id)
       .order('created_at', { ascending: true });
 
@@ -852,7 +854,8 @@ app.get('/api/students', async (req: Request, res: Response): Promise<any> => {
         team: s.teams ? {
           id: s.teams.id,
           name: s.teams.name,
-          leaderId: s.teams.leader_id
+          leaderId: s.teams.leader_id,
+          qualifiedR3: s.teams.qualified_r3
         } : null
       };
     });
@@ -1357,6 +1360,34 @@ app.delete('/api/students/:id', async (req: Request, res: Response): Promise<any
     return res.json({ success: true });
   } catch (err: any) {
     console.error("Unexpected error in DELETE /api/students:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Toggle team R3 qualification
+app.put('/api/teams/:id/qualify', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { qualified_r3 } = req.body;
+  if (qualified_r3 === undefined) {
+    return res.status(400).json({ success: false, error: 'Missing qualified_r3 field' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('teams')
+      .update({ qualified_r3 })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("PUT /api/teams/:id/qualify error:", error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true, team: data });
+  } catch (err: any) {
+    console.error("Unexpected error in PUT /api/teams/:id/qualify:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

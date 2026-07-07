@@ -542,6 +542,37 @@ export default function CollegeDashboardPage() {
     }
   };
 
+  const handleToggleQualifyR3 = async (teamId: string, qualify: boolean) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/teams/${teamId}/qualify`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qualified_r3: qualify })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+
+      setStudents(prev => prev.map(s => {
+        if (s.teamId === teamId && s.team) {
+          return {
+            ...s,
+            team: {
+              ...s.team,
+              qualifiedR3: qualify
+            }
+          };
+        }
+        return s;
+      }));
+
+      addToast(qualify ? "Team qualified for Round 3!" : "Team disqualified from Round 3.", "success");
+    } catch (err: any) {
+      addToast(err.message || "Failed to update qualification", "error");
+    }
+  };
+
   const handleFlagOffRound = async (roundKey: string) => {
     const newRounds = { ...rounds, [roundKey]: "live" };
     setRounds(newRounds as any);
@@ -1584,6 +1615,25 @@ export default function CollegeDashboardPage() {
                                        <div style={{ fontSize: 10, color: "var(--slate-2)", marginTop: 2 }}>
                                          {g.isTeam ? `${g.members.length} members · ${g.college}` : g.college}
                                        </div>
+                                       {g.members[0]?.team && (
+                                         <button 
+                                           className={`btn btn-sm ${g.members[0].team.qualifiedR3 ? 'btn-coral' : 'btn-outline-coral'}`}
+                                           style={{ 
+                                             marginTop: 6, 
+                                             padding: "2px 8px", 
+                                             fontSize: 10, 
+                                             borderRadius: 6,
+                                             height: "auto",
+                                             lineHeight: "1.4"
+                                           }}
+                                           onClick={(e) => {
+                                             e.stopPropagation();
+                                             handleToggleQualifyR3(g.members[0].team!.id, !g.members[0].team!.qualifiedR3);
+                                           }}
+                                         >
+                                           {g.members[0].team.qualifiedR3 ? "✓ Qualified for R3" : "Qualify for R3"}
+                                         </button>
+                                       )}
                                      </div>
                                    </div>
                                  </td>

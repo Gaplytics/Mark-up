@@ -1089,6 +1089,16 @@ export default function StudentDashboardPage() {
                     );
                   }
 
+                  if (roundKey === "round3" && !activeStudent.team.qualifiedR3) {
+                    return (
+                      <div className="empty">
+                        <div className="ico">🔒</div>
+                        <div className="t">Not Qualified for Round 3</div>
+                        <p style={{ fontSize: 12.5, color: "var(--slate-2)" }}>Your team has not been qualified for Round 3 by your College Admin.</p>
+                      </div>
+                    );
+                  }
+
                   if (r.status === "approved") {
                     return (
                       <div className="empty">

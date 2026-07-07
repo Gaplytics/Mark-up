@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.teams (
   leader_id UUID NULL,
   r1_avg_score NUMERIC NULL,
   r2_video_link TEXT NULL,
+  qualified_r3 BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
   CONSTRAINT teams_pkey PRIMARY KEY (id),
   CONSTRAINT teams_college_id_fkey FOREIGN KEY (college_id) REFERENCES public.colleges (id) ON DELETE CASCADE,

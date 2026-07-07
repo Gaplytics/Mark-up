@@ -16,6 +16,7 @@ export interface Team {
   id: string;
   name: string;
   leaderId: string | null;
+  qualifiedR3?: boolean;
 }
 
 export interface Student {
@@ -298,7 +299,8 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
               return {
                 id: resolved.id,
                 name: resolved.name,
-                leaderId: resolved.leader_id || resolved.leaderId || null
+                leaderId: resolved.leader_id || resolved.leaderId || null,
+                qualifiedR3: resolved.qualified_r3 || resolved.qualifiedR3 || false
               };
             })(),
             round1Status: s.round1_status || "not-started",
