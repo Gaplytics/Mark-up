@@ -1749,6 +1749,36 @@ app.post('/api/students/:id/submit-score', async (req: Request, res: Response): 
   }
 });
 
+const isSlotOver = (label: string | undefined): boolean => {
+  if (!label) return false;
+  try {
+    const cleanLabel = label.replace(/[\u2012\u2013\u2014-]/g, "-");
+    const parts = cleanLabel.split("-");
+    if (parts.length !== 2) return false;
+
+    const parseTimeToMinutes = (timeStr: string) => {
+      const match = timeStr.trim().match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!match) return null;
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const isPM = match[3].toUpperCase() === "PM";
+      if (h === 12 && !isPM) h = 0;
+      if (h !== 12 && isPM) h += 12;
+      return h * 60 + m;
+    };
+
+    const endMinutes = parseTimeToMinutes(parts[1]);
+    if (endMinutes === null) return false;
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return currentMinutes > endMinutes;
+  } catch (e) {
+    return false;
+  }
+};
+
 // =====================================
 // ROUND 2 / 3 SUBMISSIONS
 // =====================================
@@ -1809,10 +1839,10 @@ app.post('/api/students/:id/submit-round', async (req: Request, res: Response): 
       }
     }
 
-    // Check if all team members have completed Round 1
+    // Check if all team members have completed Round 1 (or their slots are over)
     const { data: teamMembers, error: membersErr } = await supabaseAdmin
       .from('students')
-      .select('id, name, round1_status')
+      .select('id, name, round1_status, slot_id')
       .eq('team_id', team_id);
 
     if (membersErr || !teamMembers || teamMembers.length === 0) {
@@ -1820,7 +1850,25 @@ app.post('/api/students/:id/submit-round', async (req: Request, res: Response): 
       return res.status(500).json({ success: false, error: 'Could not verify team qualification.' });
     }
 
-    const unqualifiedMembers = teamMembers.filter(m => m.round1_status !== 'submitted');
+    // Fetch slots to get labels
+    const { data: slots, error: slotsErr } = await supabaseAdmin
+      .from('slots')
+      .select('id, label');
+
+    const slotMap = new Map<string, string>();
+    if (slots) {
+      slots.forEach(s => slotMap.set(s.id, s.label));
+    }
+
+    const unqualifiedMembers = teamMembers.filter(m => {
+      if (m.round1_status === 'submitted') return false;
+      if (m.slot_id) {
+        const label = slotMap.get(m.slot_id);
+        if (isSlotOver(label)) return false;
+      }
+      return true;
+    });
+
     if (unqualifiedMembers.length > 0) {
       const names = unqualifiedMembers.map(m => `"${m.name}"`).join(', ');
       return res.status(403).json({
