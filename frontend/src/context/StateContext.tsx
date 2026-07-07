@@ -260,7 +260,17 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
             college: collegeAdminName || "Alliance University",
             slotId: s.slot_id,
             teamId: s.teamId || s.team_id || null,
-            team: s.team || null,
+            team: (() => {
+              const t = s.teams;
+              if (!t) return null;
+              const resolved = Array.isArray(t) ? t[0] : t;
+              if (!resolved) return null;
+              return {
+                id: resolved.id,
+                name: resolved.name,
+                leaderId: resolved.leader_id || resolved.leaderId || null
+              };
+            })(),
             round1Status: s.round1_status || "not-started",
             r1Score: s.r1_score,
             proctoringFlagged: Boolean(s.proctoring_flagged),

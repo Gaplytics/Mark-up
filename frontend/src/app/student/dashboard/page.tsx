@@ -94,6 +94,7 @@ export default function StudentDashboardPage() {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isAcknowledged, setIsAcknowledged] = useState(false);
+  const [showFullscreenRequired, setShowFullscreenRequired] = useState(false);
 
   // Adaptive testing state variables
   const [currentQuestion, setCurrentQuestion] = useState<any | null>(null);
@@ -144,13 +145,6 @@ export default function StudentDashboardPage() {
         handleSubmitTest(false, 0, true, `Disqualified: Exceeded 3 warnings (${reason})`);
       } else {
         addToast(`Warning ${localWarningCount}/3: ${reason}! Violation recorded.`, "error", "Proctoring Warning — ");
-        
-        // Attempt to re-enter fullscreen if exited
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-          setTimeout(() => {
-            document.documentElement.requestFullscreen().catch(() => {});
-          }, 1000);
-        }
       }
     };
 
@@ -164,13 +158,6 @@ export default function StudentDashboardPage() {
       if (e.button === 1) { // Middle click
         e.preventDefault();
         handleViolation("Middle-click / Wheel click prohibited");
-      }
-    };
-
-    const handleClick = (e: MouseEvent) => {
-      const examContainer = document.getElementById("exam-container");
-      if (examContainer && !examContainer.contains(e.target as Node)) {
-        handleViolation("Click outside exam window prohibited");
       }
     };
 
@@ -302,12 +289,16 @@ export default function StudentDashboardPage() {
 
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
+        setShowFullscreenRequired(true);
         handleViolation("Exited Fullscreen Mode");
+      } else {
+        setShowFullscreenRequired(false);
       }
     };
 
     const handleResize = () => {
       if (!document.fullscreenElement) {
+        setShowFullscreenRequired(true);
         handleViolation("Window resized / Exited Fullscreen");
       }
     };
@@ -337,7 +328,6 @@ export default function StudentDashboardPage() {
     document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("auxclick", handleAuxClick);
-    document.addEventListener("click", handleClick);
     document.addEventListener("copy", handleCopy);
     document.addEventListener("cut", handleCut);
     document.addEventListener("paste", handlePaste);
@@ -357,7 +347,6 @@ export default function StudentDashboardPage() {
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("auxclick", handleAuxClick);
-      document.removeEventListener("click", handleClick);
       document.removeEventListener("copy", handleCopy);
       document.removeEventListener("cut", handleCut);
       document.removeEventListener("paste", handlePaste);
@@ -446,6 +435,15 @@ export default function StudentDashboardPage() {
       return;
     }
 
+    // Request fullscreen immediately to preserve the user gesture token
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (err) {
+      console.error("Fullscreen request failed", err);
+    }
+
     setIsLoadingQuestions(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/questions`);
@@ -467,14 +465,6 @@ export default function StudentDashboardPage() {
         addToast("Camera and Microphone access are required to take the test.", "error", "Proctoring required — ");
         setIsLoadingQuestions(false);
         return;
-      }
-
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        }
-      } catch (err) {
-        console.error("Fullscreen request failed", err);
       }
 
       // Initialize adaptive testing starting with Easy
@@ -698,6 +688,17 @@ export default function StudentDashboardPage() {
     } catch (err) {
       console.error("Error submitting round:", err);
       addToast("Network error: Could not reach the server.", "error", "Submission failed — ");
+    }
+  };
+
+  const handleReenterFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+        setShowFullscreenRequired(false);
+      }
+    } catch (err) {
+      console.error("Failed to re-enter fullscreen:", err);
     }
   };
 
@@ -1125,6 +1126,49 @@ export default function StudentDashboardPage() {
           </div>
         </div>
       </div>
+      {showFullscreenRequired && quizStarted && !examFinished && !isDisqualified && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(15, 23, 42, 0.95)",
+          backdropFilter: "blur(8px)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#f8fafc",
+          zIndex: 99999,
+          padding: "24px",
+          textAlign: "center"
+        }}>
+          <div style={{
+            background: "#1e293b",
+            padding: "32px",
+            borderRadius: "16px",
+            border: "1px solid #334155",
+            maxWidth: "480px",
+            width: "100%",
+            boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.5)"
+          }}>
+            <div style={{ fontSize: "48px", marginBottom: "16px" }}>🖥️</div>
+            <h3 style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "12px", color: "#f1f5f9" }}>Fullscreen Mode Required</h3>
+            <p style={{ fontSize: "14px", color: "#94a3b8", marginBottom: "24px", lineHeight: "1.5" }}>
+              To ensure the integrity of the examination, you must remain in fullscreen mode. 
+              Please click the button below to re-enter fullscreen and resume your test.
+            </p>
+            <button 
+              className="btn btn-coral btn-block" 
+              onClick={handleReenterFullscreen}
+              style={{ padding: "12px", fontSize: "15px", fontWeight: "600" }}
+            >
+              Re-enter Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
