@@ -365,10 +365,20 @@ export default function StudentDashboardPage() {
     }
   }, [currentStudent, router]);
 
+  const activeStudent = students.find(s => s.id === currentStudent?.studentId);
+
+  useEffect(() => {
+    if (activeStudent && rounds.round1 === "closed") {
+      const isLeader = activeStudent.team && activeStudent.team.leaderId === activeStudent.id;
+      if (!isLeader) {
+        setCurrentStudent(null);
+        addToast("Round 1 is completed. Only Team Leaders are authorized to access the dashboard for subsequent rounds.", "error");
+        router.replace("/student/login");
+      }
+    }
+  }, [activeStudent, rounds.round1, router, setCurrentStudent, addToast]);
+
   if (!currentStudent) return null;
-
-  const activeStudent = students.find(s => s.id === currentStudent.studentId);
-
   if (!activeStudent) return null;
 
   const checkIsSlotActive = (label: string | undefined): { isActive: boolean; reason?: string } => {
@@ -657,6 +667,13 @@ export default function StudentDashboardPage() {
       addToast("Add a video link or upload a file first.", "error", "Missing submission — ");
       return;
     }
+
+    // Validate if the link is a YouTube link
+    const isYoutube = link.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?.*v=))([\w-]{11})/i);
+    if (!isYoutube) {
+      addToast("Only YouTube links (including Shorts) are applicable for submission.", "error", "Invalid Link — ");
+      return;
+    }
     
     if (!currentStudent) return;
 
@@ -856,7 +873,15 @@ export default function StudentDashboardPage() {
                   </div>
                 )}
 
-                {rounds.round1 !== "not-started" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (() => {
+                {rounds.round1 === "closed" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (
+                  <div className="empty">
+                    <div className="ico">🔒</div>
+                    <div className="t">Round 1 is closed</div>
+                    <p style={{ fontSize: 12.5, color: "var(--slate-2)" }}>Round 1 is closed now. No further exams will be conducted.</p>
+                  </div>
+                )}
+
+                {rounds.round1 === "live" && activeStudent.r1Score === null && !quizStarted && !examFinished && !isDisqualified && (() => {
                   const slotLabel = slotInfo(activeStudent.slotId).slot?.label;
                   const slotStatus = checkIsSlotActive(slotLabel);
 
@@ -1112,10 +1137,13 @@ export default function StudentDashboardPage() {
                         <label>Reel / video link</label>
                         <input
                           className="input"
-                          placeholder="https://drive.google.com/..."
+                          placeholder="https://www.youtube.com/watch?v=..."
                           value={studentLinks[roundKey] || r.link || ""}
                           onChange={(e) => setStudentLinks({ ...studentLinks, [roundKey]: e.target.value })}
                         />
+                        <div style={{ fontSize: "12px", color: "var(--coral)", marginTop: "6px", fontWeight: "500", textAlign: "left" }}>
+                          ⚠️ Note: Only YouTube links (including Shorts) are applicable for submission.
+                        </div>
                       </div>
                       <button className="btn btn-coral btn-block" onClick={() => handleStudentRoundSubmit(roundKey)}>Submit for review</button>
                     </>

@@ -144,6 +144,15 @@ export default function JuryDashboardPage() {
 
   if (!currentJury) return null;
 
+  const assignedSlotIds = currentJury.slotIds || currentJury.slot_ids || [];
+
+  const myStudents = students.filter(s => {
+    if (assignedSlotIds.length > 0) {
+      return s.slotId && assignedSlotIds.includes(s.slotId);
+    }
+    return true;
+  });
+
   const handleJurySubmissionAction = (sid: string, roundKey: "round2" | "round3", status: "approved" | "rejected") => {
     // Sync to Supabase
     fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/students/${sid}/jury-review`, {
@@ -278,7 +287,11 @@ export default function JuryDashboardPage() {
                 <div className="u-name">{currentJury.name}</div>
                 <div className="u-role">SOB Faculty Jury</div>
                 <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>
-                  {currentJury.slotId || currentJury.slot_id ? (slots.find(s => s.id === (currentJury.slotId || currentJury.slot_id))?.label || "Assigned Slot") : "All Slots"}
+                  {(() => {
+                    const assignedSlots = currentJury.slotIds || currentJury.slot_ids || [];
+                    if (assignedSlots.length === 0) return "All Slots";
+                    return assignedSlots.map(sid => slots.find(s => s.id === sid)?.label).filter(Boolean).join(", ");
+                  })()}
                 </div>
               </div>
             </div>
@@ -314,17 +327,21 @@ export default function JuryDashboardPage() {
                 <div className="grid grid-3" style={{ marginBottom: 20 }}>
                   <div className="card stat-card">
                     <div className="label">Students assigned</div>
-                    <div className="value">{students.length}</div>
+                    <div className="value">{myStudents.length}</div>
                     <div className="delta">across all rounds</div>
                   </div>
                   <div className="card stat-card">
                     <div className="label">Round 2 awaiting review</div>
-                    <div className="value">{students.filter(s => s.round2.status === "pending" && s.round2.juryScore === null).length}</div>
+                    <div className="value">
+                      {myStudents.filter(s => s.round2.status === "pending" && s.round2.juryScore === null && (!s.teamId || (s.team && s.team.leaderId === s.id))).length}
+                    </div>
                     <div className="delta">reels pending</div>
                   </div>
                   <div className="card stat-card">
                     <div className="label">Round 3 awaiting review</div>
-                    <div className="value">{students.filter(s => s.round3.status === "pending" && s.round3.juryScore === null).length}</div>
+                    <div className="value">
+                      {myStudents.filter(s => s.round3.status === "pending" && s.round3.juryScore === null && (!s.teamId || (s.team && s.team.leaderId === s.id))).length}
+                    </div>
                     <div className="delta">films pending</div>
                   </div>
                 </div>
@@ -356,7 +373,7 @@ export default function JuryDashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {students.map(s => {
+                      {myStudents.map(s => {
                         return (
                           <tr key={s.id}>
                             <td><b>{s.name}</b></td>
@@ -372,18 +389,23 @@ export default function JuryDashboardPage() {
               </div>
             )}
 
-            {/* --- ROUND 2 / 3 --- */}
+{/* --- ROUND 2 / 3 --- */}
             {(juryTab === "round2" || juryTab === "round3") && (() => {
               const roundKey = juryTab as "round2" | "round3";
               const label = roundKey === "round2" ? "90-Sec Reel" : "60-Sec Demo Day Film";
               
-              const assignedSlotId = currentJury.slotId || currentJury.slot_id;
-
               // Filter to show only candidates who have submitted & belong to assigned slot
-              const submittedCandidates = students.filter(s => {
+              // For team-based rounds (2 and 3), only show the team leader.
+              const submittedCandidates = myStudents.filter(s => {
                 if (s[roundKey]?.status === "not-submitted") return false;
-                if (assignedSlotId && assignedSlotId !== "all") {
-                  return s.slotId === assignedSlotId;
+                if (s.teamId && s.team) {
+                  if (s.team.leaderId) {
+                    if (s.team.leaderId !== s.id) return false;
+                  } else {
+                    // Fallback if no leader is assigned: only show the first member of the team to avoid duplicates
+                    const teamMembersList = myStudents.filter(item => item.teamId === s.teamId).sort((a, b) => a.id.localeCompare(b.id));
+                    if (teamMembersList[0]?.id !== s.id) return false;
+                  }
                 }
                 return true;
               });
@@ -445,9 +467,16 @@ export default function JuryDashboardPage() {
                   const data = await res.json();
                   if (!data.success) throw new Error(data.error);
                   
-                  // Update local state
+                  // Update local state for all team members if applicable
+                  const teamId = s.teamId;
                   setStudents(students.map(item => {
-                    if (item.id === s.id) {
+                    if (teamId && item.teamId === teamId) {
+                      return {
+                        ...item,
+                        [roundKey]: { ...item[roundKey], juryScore: averageScore, status: "approved" }
+                      };
+                    }
+                    if (!teamId && item.id === s.id) {
                       return {
                         ...item,
                         [roundKey]: { ...item[roundKey], juryScore: averageScore, status: "approved" }

@@ -157,7 +157,7 @@ app.get('/api/judges', async (req: Request, res: Response): Promise<any> => {
   try {
     const { data, error } = await supabaseAdmin
       .from('judges')
-      .select('id, name, email, dept, college_id, slot_id, colleges(name), created_at')
+      .select('id, name, email, dept, college_id, slot_ids, colleges(name), created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -172,8 +172,8 @@ app.get('/api/judges', async (req: Request, res: Response): Promise<any> => {
       email: j.email,
       dept: j.dept,
       college_id: j.college_id,
-      slot_id: j.slot_id || null,
-      slotId: j.slot_id || null,
+      slot_ids: j.slot_ids || [],
+      slotIds: j.slot_ids || [],
       college_name: j.colleges ? j.colleges.name : 'Unknown College',
       created_at: j.created_at
     }));
@@ -206,7 +206,7 @@ app.delete('/api/judges/:id', async (req: Request, res: Response): Promise<any> 
 
 // Create a judge & send invite email
 app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
-  const { name, email, dept, college_id, slot_id } = req.body;
+  const { name, email, dept, college_id, slot_ids } = req.body;
   if (!name || !email || !dept || !college_id) {
     return res.status(400).json({ success: false, error: 'Missing fields' });
   }
@@ -279,7 +279,7 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
     // 2. Upsert profile into judges table using college_id foreign key
     const { error: dbError } = await supabaseAdmin
       .from('judges')
-      .upsert([{ id: userId, name, email, dept, college_id, slot_id: slot_id || null }], { onConflict: 'id' });
+      .upsert([{ id: userId, name, email, dept, college_id, slot_ids: slot_ids || null }], { onConflict: 'id' });
 
     if (dbError) {
       console.error("DB upsert error for judge:", dbError);
@@ -355,6 +355,40 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
     return res.json({ success: true, message: 'Judge appointed and invitation email sent' });
   } catch (err: any) {
     console.error("Unexpected error in POST /api/judges:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update an existing judge
+app.put('/api/judges/:id', async (req: Request, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { name, email, dept, slot_ids } = req.body;
+  if (!name || !email || !dept) {
+    return res.status(400).json({ success: false, error: 'Missing fields' });
+  }
+
+  try {
+    // 1. Update the email in Supabase auth if it changed
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id as string, { email });
+    if (authError) {
+      console.error("Auth update error for judge:", authError);
+      return res.status(500).json({ success: false, error: authError.message });
+    }
+
+    // 2. Update profiles table
+    const { error: dbError } = await supabaseAdmin
+      .from('judges')
+      .update({ name, email, dept, slot_ids: slot_ids || null })
+      .eq('id', id);
+
+    if (dbError) {
+      console.error("DB update error for judge:", dbError);
+      return res.status(500).json({ success: false, error: dbError.message });
+    }
+
+    return res.json({ success: true, message: 'Judge updated successfully' });
+  } catch (err: any) {
+    console.error("Unexpected error in PUT /api/judges/:id:", err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

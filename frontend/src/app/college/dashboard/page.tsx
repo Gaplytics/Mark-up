@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useStateContext, Student, Judge, StatusBadge, initials } from "@/context/StateContext";
+import { useStateContext, Student, Judge, StatusBadge, initials, isSlotOver } from "@/context/StateContext";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -75,6 +75,20 @@ const renderVideoEmbed = (link: string) => {
     </div>
   );
 };
+
+interface LeaderboardGroup {
+  isTeam: boolean;
+  id: string;
+  name: string;
+  college: string;
+  members: Student[];
+  r1Score: number | null;
+  r2Status: string;
+  r2Score: number | null;
+  r3Status: string;
+  r3Score: number | null;
+  avg: number;
+}
 
 export default function CollegeDashboardPage() {
   const router = useRouter();
@@ -403,7 +417,62 @@ export default function CollegeDashboardPage() {
   const [newJudgeName, setNewJudgeName] = useState("");
   const [newJudgeEmail, setNewJudgeEmail] = useState("");
   const [newJudgeDept, setNewJudgeDept] = useState("");
-  const [newJudgeSlot, setNewJudgeSlot] = useState("");
+  const [newJudgeSlots, setNewJudgeSlots] = useState<string[]>([]);
+  const [editingJudgeId, setEditingJudgeId] = useState<string | null>(null);
+
+  const handleEditJudgeClick = (j: Judge) => {
+    setEditingJudgeId(j.id);
+    setNewJudgeName(j.name);
+    setNewJudgeEmail(j.email);
+    setNewJudgeDept(j.dept || "");
+    setNewJudgeSlots(j.slotIds || j.slot_ids || []);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingJudgeId(null);
+    setNewJudgeName("");
+    setNewJudgeEmail("");
+    setNewJudgeDept("");
+    setNewJudgeSlots([]);
+  };
+
+  const handleUpdateJudge = async () => {
+    if (!newJudgeName.trim() || !newJudgeEmail.trim()) {
+      addToast("Name and email are required.", "error", "Missing info — ");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges/${editingJudgeId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newJudgeName.trim(),
+          email: newJudgeEmail.trim().toLowerCase(),
+          dept: newJudgeDept.trim() || "Marketing",
+          slot_ids: newJudgeSlots.length > 0 ? newJudgeSlots : null,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        addToast(newJudgeName + " updated successfully!", "success", "Judge updated — ");
+        handleCancelEdit();
+        
+        // Refresh judges list from database
+        const freshRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
+        const freshJson = await freshRes.json();
+        if (freshJson.success) {
+          setJudges(freshJson.data);
+        }
+      } else {
+        addToast(`Failed to update judge: ${json.error}`, "error", "Update failed");
+      }
+    } catch (err) {
+      addToast("Network error: Could not connect to backend.", "error", "Update failed");
+    }
+  };
 
   const handleAddJudge = async () => {
     if (!newJudgeName.trim() || !newJudgeEmail.trim()) {
@@ -425,7 +494,7 @@ export default function CollegeDashboardPage() {
           email: newJudgeEmail.trim().toLowerCase(),
           dept: newJudgeDept.trim() || "Marketing",
           college_id: collegeAdminId,
-          slot_id: newJudgeSlot || null,
+          slot_ids: newJudgeSlots.length > 0 ? newJudgeSlots : null,
         }),
       });
 
@@ -436,7 +505,7 @@ export default function CollegeDashboardPage() {
         setNewJudgeName("");
         setNewJudgeEmail("");
         setNewJudgeDept("");
-        setNewJudgeSlot("");
+        setNewJudgeSlots([]);
         
         // Refresh judges list from database
         const freshRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
@@ -516,26 +585,123 @@ export default function CollegeDashboardPage() {
     }
   };
 
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroupExpand = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  // Group students into teams/individuals for the leaderboard
+  const leaderboardGroups: LeaderboardGroup[] = (() => {
+    const groups: LeaderboardGroup[] = [];
+
+    // Group teams
+    const teamIds = Array.from(new Set(students.map(s => s.teamId).filter(Boolean))) as string[];
+    teamIds.forEach(tId => {
+      const members = students.filter(s => s.teamId === tId);
+      const leader = members.find(m => m.team?.leaderId === m.id) || members[0];
+      
+      // Calculate average R1 score for the team, counting null as 0 if slot is over
+      const r1Scores = members.map(m => {
+        let r1 = m.r1Score;
+        if (r1 === null && m.slotId) {
+          const studentSlot = slots.find(sl => sl.id === m.slotId);
+          if (studentSlot && isSlotOver(studentSlot.label)) {
+            r1 = 0;
+          }
+        }
+        return r1;
+      }).filter((v): v is number => v !== null);
+      const avgR1 = r1Scores.length > 0 ? (r1Scores.reduce((a, b) => a + b, 0) / r1Scores.length) : null;
+      
+      const r2Status = leader.round2.status;
+      const r2Score = leader.round2.juryScore;
+      const r3Status = leader.round3.status;
+      const r3Score = leader.round3.juryScore;
+
+      // Group average
+      const scores: number[] = [];
+      if (avgR1 !== null) scores.push(avgR1 / 3);
+      if (r2Score !== null) scores.push(r2Score);
+      if (r3Score !== null) scores.push(r3Score);
+      const avg = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
+
+      groups.push({
+        isTeam: true,
+        id: tId,
+        name: leader.team?.name || "Unnamed Team",
+        college: leader.college,
+        members,
+        r1Score: avgR1,
+        r2Status,
+        r2Score,
+        r3Status,
+        r3Score,
+        avg
+      });
+    });
+
+    // Add individual students (teamId is null)
+    students.filter(s => !s.teamId).forEach(s => {
+      const r2Status = s.round2.status;
+      const r2Score = s.round2.juryScore;
+      const r3Status = s.round3.status;
+      const r3Score = s.round3.juryScore;
+
+      let r1 = s.r1Score;
+      if (r1 === null && s.slotId) {
+        const studentSlot = slots.find(sl => sl.id === s.slotId);
+        if (studentSlot && isSlotOver(studentSlot.label)) {
+          r1 = 0;
+        }
+      }
+
+      const scores: number[] = [];
+      if (r1 !== null) scores.push(r1 / 3);
+      if (r2Score !== null) scores.push(r2Score);
+      if (r3Score !== null) scores.push(r3Score);
+      const avg = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
+
+      groups.push({
+        isTeam: false,
+        id: s.id,
+        name: s.name,
+        college: s.college,
+        members: [s],
+        r1Score: r1,
+        r2Status,
+        r2Score,
+        r3Status,
+        r3Score,
+        avg
+      });
+    });
+
+    // Sort groups by average score descending
+    return groups.sort((a, b) => b.avg - a.avg);
+  })();
+
   const handleExportPDF = () => {
     try {
       const doc = new jsPDF();
-      doc.text("Live Leaderboard - MarkUp", 14, 15);
+      doc.text("Live Leaderboard (Groups) - MarkUp", 14, 15);
       
-      const tableData = [...students]
-        .map(s => ({ s, avg: studentAverage(s) }))
-        .sort((a, b) => b.avg - a.avg)
-        .map((r, i) => [
-          `#${i + 1}`,
-          r.s.name,
-          r.s.proctoringFlagged ? "Disqualified" : (r.s.r1Score !== null ? "Tested" : "—"),
-          r.s.r1Score !== null ? (r.s.r1Score / 3).toFixed(1) : "—",
-          r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : (r.s.round2.status === "pending" ? "Pending" : "Not submitted"),
-          r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : (r.s.round3.status === "pending" ? "Pending" : "Not submitted"),
-          r.avg.toFixed(1)
-        ]);
+      const tableData = leaderboardGroups.map((g, i) => [
+        `#${i + 1}`,
+        g.isTeam ? `${g.name} (Team)` : g.name,
+        g.r1Score !== null ? (g.r1Score / 3).toFixed(1) : "—",
+        g.r2Score !== null ? g.r2Score.toFixed(1) : g.r2Status,
+        g.r3Score !== null ? g.r3Score.toFixed(1) : g.r3Status,
+        g.avg.toFixed(1)
+      ]);
 
       autoTable(doc, {
-        head: [["Rank", "Student", "R1 Status", "R1 Score", "R2 Score", "R3 Score", "Average"]],
+        head: [["Rank", "Team / Student", "R1 Avg", "R2 Score", "R3 Score", "Average"]],
         body: tableData,
         startY: 20
       });
@@ -561,6 +727,16 @@ export default function CollegeDashboardPage() {
     s => s.round2.status !== "not-submitted" && !s.team?.name
   ).length;
   const submittedReelsCount = submittedTeamNames.size + submittedIndividualCount;
+
+  const submittedR3Teams = new Set(
+    students
+      .filter(s => s.round3.status !== "not-submitted" && s.team?.name)
+      .map(s => s.team?.name)
+  );
+  const submittedR3IndividualCount = students.filter(
+    s => s.round3.status !== "not-submitted" && !s.team?.name
+  ).length;
+  const submittedR3FilmsCount = submittedR3Teams.size + submittedR3IndividualCount;
 
   const handleLogout = () => {
     router.push("/");
@@ -1173,12 +1349,17 @@ export default function CollegeDashboardPage() {
               );
             })()}
 
-            {/* --- APPOINT JUDGES --- */}
             {collegeTab === "judges" && (
               <div className="grid grid-2">
                 <div className="card card-pad">
-                  <div className="section-title">Appoint a judge</div>
-                  <div className="section-desc">Add School of Business faculty to the jury panel for this contest.</div>
+                  <div className="section-title">
+                    {editingJudgeId ? `Edit Judge: ${newJudgeName}` : "Appoint a judge"}
+                  </div>
+                  <div className="section-desc">
+                    {editingJudgeId 
+                      ? "Update this judge's information and assigned slots." 
+                      : "Add School of Business faculty to the jury panel for this contest."}
+                  </div>
                   <div className="form-group">
                     <label>Full name</label>
                     <input className="input" placeholder="Dr. Full Name" value={newJudgeName} onChange={(e) => setNewJudgeName(e.target.value)} />
@@ -1192,15 +1373,53 @@ export default function CollegeDashboardPage() {
                     <input className="input" placeholder="e.g. Marketing" value={newJudgeDept} onChange={(e) => setNewJudgeDept(e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label>Assigned Slot (to review submissions)</label>
-                    <select className="input" value={newJudgeSlot} onChange={(e) => setNewJudgeSlot(e.target.value)}>
-                      <option value="">All Slots (Review all teams)</option>
-                      {slots.map(s => (
-                        <option key={s.id} value={s.id}>{s.label}</option>
-                      ))}
-                    </select>
+                    <label>Assigned Slots (to review submissions)</label>
+                    <div style={{ 
+                      display: "flex", 
+                      flexDirection: "column", 
+                      gap: "10px", 
+                      marginTop: "8px", 
+                      maxHeight: "180px", 
+                      overflowY: "auto", 
+                      border: "1px solid var(--line)", 
+                      padding: "12px", 
+                      borderRadius: "8px",
+                      background: "#fff"
+                    }}>
+                      {slots.map(s => {
+                        const checked = newJudgeSlots.includes(s.id);
+                        return (
+                          <label key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "normal" }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewJudgeSlots([...newJudgeSlots, s.id]);
+                                } else {
+                                  setNewJudgeSlots(newJudgeSlots.filter(id => id !== s.id));
+                                }
+                              }}
+                            />
+                            {s.label}
+                          </label>
+                        );
+                      })}
+                      {slots.length === 0 && (
+                        <span style={{ fontSize: "12px", color: "var(--slate-2)", fontStyle: "italic" }}>No slots available</span>
+                      )}
+                    </div>
                   </div>
-                  <button className="btn btn-coral btn-block" onClick={handleAddJudge}>Appoint judge</button>
+                  <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
+                    {editingJudgeId ? (
+                      <>
+                        <button className="btn btn-coral" style={{ flex: 1 }} onClick={handleUpdateJudge}>Save Changes</button>
+                        <button className="btn btn-ghost" style={{ flex: 1 }} onClick={handleCancelEdit}>Cancel</button>
+                      </>
+                    ) : (
+                      <button className="btn btn-coral btn-block" onClick={handleAddJudge}>Appoint judge</button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="card card-pad">
@@ -1208,7 +1427,10 @@ export default function CollegeDashboardPage() {
                   <div className="section-desc">Each judge gets login access to review and score submissions for their assigned slot.</div>
                   <div className="stack">
                     {judges.map(j => {
-                      const assignedSlot = slots.find(s => s.id === (j.slotId || j.slot_id));
+                      const assignedSlots = j.slotIds || j.slot_ids || [];
+                      const slotLabels = assignedSlots.length > 0 
+                        ? assignedSlots.map(sid => slots.find(s => s.id === sid)?.label).filter(Boolean).join(", ")
+                        : "All Slots";
                       return (
                         <div key={j.id} className="row-between" style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 10 }}>
                           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -1217,13 +1439,16 @@ export default function CollegeDashboardPage() {
                               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--navy)" }}>{j.name}</div>
                                 <span className="badge badge-amber" style={{ fontSize: 10, padding: "2px 6px" }}>
-                                  {assignedSlot ? assignedSlot.label : "All Slots"}
+                                  {slotLabels}
                                 </span>
                               </div>
                               <div style={{ fontSize: 12, color: "var(--slate-2)" }}>{j.email} · {j.dept}</div>
                             </div>
                           </div>
-                          <button className="btn btn-ghost btn-sm" onClick={() => setJudgeToRemove(j.id)}>Remove</button>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => handleEditJudgeClick(j)}>Edit</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setJudgeToRemove(j.id)}>Remove</button>
+                          </div>
                         </div>
                       );
                     })}
@@ -1299,8 +1524,8 @@ export default function CollegeDashboardPage() {
                   </div>
                   <div className="card stat-card">
                     <div className="label">Demo-day films (R3)</div>
-                    <div className="value">{students.filter(s => s.round3.status !== "not-submitted").length}/{students.length}</div>
-                    <div className="delta">students</div>
+                    <div className="value">{submittedR3FilmsCount}/{totalReelsCount}</div>
+                    <div className="delta">films received</div>
                   </div>
                 </div>
 
@@ -1315,32 +1540,101 @@ export default function CollegeDashboardPage() {
                       <thead>
                         <tr>
                           <th>Rank</th>
-                          <th>Student</th>
-                          <th>R1 Participation</th>
+                          <th>Team / Student</th>
+                          <th>R1 Status</th>
                           <th>R1 Score</th>
-                          <th>R2 Status</th>
-                          <th>R3 Status</th>
+                          <th>R2 Score</th>
+                          <th>R3 Score</th>
                           <th>Average</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {[...students]
-                          .map(s => ({ s, avg: studentAverage(s) }))
-                          .sort((a, b) => b.avg - a.avg)
-                          .map((r, i) => (
-                            <tr key={r.s.id}>
-                              <td><b>#{i + 1}</b></td>
-                              <td>
-                                <b>{r.s.name}</b>
-                                <div style={{ fontSize: 11, color: "var(--slate-2)" }}>{r.s.college}</div>
-                              </td>
-                              <td>{r.s.proctoringFlagged ? <span className="badge badge-coral" title={r.s.proctoringNote || "Disqualified"}>Disqualified</span> : (r.s.r1Score !== null ? "Tested" : "—")}</td>
-                              <td>{r.s.r1Score !== null ? (r.s.r1Score / 3).toFixed(1) : "—"}</td>
-                              <td>{r.s.round2.juryScore !== null ? r.s.round2.juryScore.toFixed(1) : <StatusBadge status={r.s.round2.status} />}</td>
-                              <td>{r.s.round3.juryScore !== null ? r.s.round3.juryScore.toFixed(1) : <StatusBadge status={r.s.round3.status} />}</td>
-                              <td><b>{r.avg.toFixed(1)}</b></td>
-                            </tr>
-                          ))}
+                        {leaderboardGroups.map((g, i) => {
+                           const isExpanded = expandedGroups.has(g.id);
+                           return (
+                             <React.Fragment key={g.id}>
+                               {/* Main Group/Team/Individual Row */}
+                               <tr 
+                                 style={{ 
+                                   background: g.isTeam ? "rgba(248, 250, 252, 0.65)" : "transparent",
+                                   cursor: g.isTeam ? "pointer" : "default" 
+                                 }}
+                                 onClick={() => g.isTeam && toggleGroupExpand(g.id)}
+                               >
+                                 <td><b>#{i + 1}</b></td>
+                                 <td>
+                                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                     {g.isTeam && (
+                                       <span style={{ 
+                                         fontSize: "10px", 
+                                         display: "inline-block", 
+                                         width: "12px", 
+                                         textAlign: "center", 
+                                         transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", 
+                                         transition: "transform 0.15s ease",
+                                         color: "var(--slate-2)"
+                                       }}>
+                                         ▶
+                                       </span>
+                                     )}
+                                     <div>
+                                       <b style={{ color: g.isTeam ? "var(--coral)" : "var(--navy)" }}>
+                                         {g.isTeam ? `👥 ${g.name}` : `👤 ${g.name}`}
+                                       </b>
+                                       <div style={{ fontSize: 10, color: "var(--slate-2)", marginTop: 2 }}>
+                                         {g.isTeam ? `${g.members.length} members · ${g.college}` : g.college}
+                                       </div>
+                                     </div>
+                                   </div>
+                                 </td>
+                                 <td>
+                                   {g.isTeam ? "Group Avg" : (g.members[0].proctoringFlagged ? <span className="badge badge-coral">Disqualified</span> : (g.r1Score !== null ? "Tested" : (isSlotOver(slots.find(sl => sl.id === g.members[0].slotId)?.label) ? <span className="badge badge-coral" style={{ background: "rgba(239,68,68,0.12)", color: "#ef4444" }}>Missed</span> : "Pending")))}
+                                 </td>
+                                 <td>
+                                   {g.r1Score !== null ? (g.r1Score / 3).toFixed(1) : "—"}
+                                 </td>
+                                 <td>
+                                   {g.r2Score !== null ? g.r2Score.toFixed(1) : <StatusBadge status={g.r2Status} />}
+                                 </td>
+                                 <td>
+                                   {g.r3Score !== null ? g.r3Score.toFixed(1) : <StatusBadge status={g.r3Status} />}
+                                 </td>
+                                 <td>
+                                   <b>{g.avg.toFixed(1)}</b>
+                                 </td>
+                               </tr>
+                               
+                               {/* Expanded Team Members Rows */}
+                               {g.isTeam && isExpanded && g.members.map((m) => {
+                                 const mAvg = studentAverage(m);
+                                 return (
+                                   <tr key={m.id} style={{ background: "#f8f9fa" }}>
+                                     <td></td>
+                                     <td style={{ paddingLeft: "30px", fontSize: "13px" }}>
+                                       <span style={{ color: "var(--slate-2)", marginRight: "6px" }}>└─</span>
+                                       {m.name} {m.team?.leaderId === m.id && <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 8, background: "rgba(255,107,107,0.12)", color: "var(--coral)", marginLeft: 6, fontWeight: 600 }}>Leader</span>}
+                                     </td>
+                                     <td>
+                                       {m.proctoringFlagged ? <span className="badge badge-coral" style={{ fontSize: 10, padding: "1px 4px" }}>Disqualified</span> : (m.r1Score !== null ? "Tested" : (isSlotOver(slots.find(sl => sl.id === m.slotId)?.label) ? <span style={{ color: "#ef4444" }}>Missed</span> : "Pending"))}
+                                     </td>
+                                     <td style={{ color: "var(--slate-2)" }}>
+                                       {m.r1Score !== null ? (m.r1Score / 3).toFixed(1) : "—"}
+                                     </td>
+                                     <td style={{ color: "var(--slate-2)" }}>
+                                       {m.round2.juryScore !== null ? m.round2.juryScore.toFixed(1) : <span style={{ fontSize: 12 }}>{m.round2.status}</span>}
+                                     </td>
+                                     <td style={{ color: "var(--slate-2)" }}>
+                                       {m.round3.juryScore !== null ? m.round3.juryScore.toFixed(1) : <span style={{ fontSize: 12 }}>{m.round3.status}</span>}
+                                     </td>
+                                     <td style={{ color: "var(--slate-2)" }}>
+                                       {mAvg.toFixed(1)}
+                                     </td>
+                                   </tr>
+                                 );
+                               })}
+                             </React.Fragment>
+                           );
+                         })}
                       </tbody>
                     </table>
                   </div>

@@ -73,16 +73,15 @@ CREATE TABLE IF NOT EXISTS public.judges (
   email TEXT NOT NULL,
   dept TEXT NOT NULL,
   college_id UUID NOT NULL,
-  slot_id TEXT NULL,
+  slot_ids TEXT[] NULL,
   created_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
   CONSTRAINT judges_pkey PRIMARY KEY (id),
   CONSTRAINT judges_email_key UNIQUE (email),
-  CONSTRAINT judges_college_id_fkey FOREIGN KEY (college_id) REFERENCES public.colleges (id) ON DELETE CASCADE,
-  CONSTRAINT judges_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES public.slots (id) ON DELETE SET NULL
+  CONSTRAINT judges_college_id_fkey FOREIGN KEY (college_id) REFERENCES public.colleges (id) ON DELETE CASCADE
 ) TABLESPACE pg_default;
 
 CREATE INDEX IF NOT EXISTS idx_judges_college_id ON public.judges USING btree (college_id) TABLESPACE pg_default;
-CREATE INDEX IF NOT EXISTS idx_judges_slot_id ON public.judges USING btree (slot_id) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_judges_slot_ids ON public.judges USING gin (slot_ids) TABLESPACE pg_default;
 
 -- 6. SCORES TABLE
 CREATE TABLE IF NOT EXISTS public.scores (

@@ -42,8 +42,8 @@ export interface Judge {
   email: string;
   dept: string;
   collegeId?: string;
-  slotId?: string | null;
-  slot_id?: string | null;
+  slotIds?: string[];
+  slot_ids?: string[];
 }
 
 export interface Slot {
@@ -76,6 +76,36 @@ export const QUIZ = [
 export function initials(str: string) {
   return str.split(" ").map(s => s[0]).join("").slice(0, 2).toUpperCase();
 }
+
+export const isSlotOver = (label: string | undefined): boolean => {
+  if (!label) return false;
+  try {
+    const cleanLabel = label.replace(/[\u2012\u2013\u2014-]/g, "-");
+    const parts = cleanLabel.split("-");
+    if (parts.length !== 2) return false;
+
+    const parseTimeToMinutes = (timeStr: string) => {
+      const match = timeStr.trim().match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!match) return null;
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const isPM = match[3].toUpperCase() === "PM";
+      if (h === 12 && !isPM) h = 0;
+      if (h !== 12 && isPM) h += 12;
+      return h * 60 + m;
+    };
+
+    const endMinutes = parseTimeToMinutes(parts[1]);
+    if (endMinutes === null) return false;
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return currentMinutes > endMinutes;
+  } catch (e) {
+    return false;
+  }
+};
 
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, [string, string]> = {
@@ -297,7 +327,16 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
   const studentAverage = (s: Student) => {
     const scores: number[] = [];
-    if (s.r1Score !== null) scores.push(s.r1Score / 3);
+    
+    let r1 = s.r1Score;
+    if (r1 === null && s.slotId) {
+      const studentSlot = slots.find(sl => sl.id === s.slotId);
+      if (studentSlot && isSlotOver(studentSlot.label)) {
+        r1 = 0;
+      }
+    }
+
+    if (r1 !== null) scores.push(r1 / 3);
     if (s.round2.juryScore !== null) scores.push(s.round2.juryScore);
     if (s.round3.juryScore !== null) scores.push(s.round3.juryScore);
     if (scores.length === 0) return 0;
