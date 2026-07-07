@@ -1648,14 +1648,15 @@ app.get('/api/questions', async (req: Request, res: Response): Promise<any> => {
 
     let finalQuestions = data && data.length > 0 ? data : FALLBACK_QUESTIONS;
 
-    // Shuffle and select up to 40 questions
+    // Shuffle and return all questions
     const shuffled = [...finalQuestions].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, 40);
 
-    return res.json({ success: true, data: selected });
+    return res.json({ success: true, data: shuffled });
   } catch (err: any) {
     console.error("Unexpected error in GET /api/questions:", err);
-    return res.json({ success: true, data: FALLBACK_QUESTIONS });
+    // Shuffle and return all fallback questions
+    const shuffledFallback = [...FALLBACK_QUESTIONS].sort(() => 0.5 - Math.random());
+    return res.json({ success: true, data: shuffledFallback });
   }
 });
 
