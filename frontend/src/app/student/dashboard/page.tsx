@@ -598,33 +598,50 @@ export default function StudentDashboardPage() {
     let newConsecEasy = consecEasyCorrect;
     let newConsecHard = consecHardWrong;
 
-    const currentDiffLower = currentQuestion.Difficulty?.toLowerCase();
-    if (currentDiffLower === "easy") {
-      if (isCorrect) {
-        const updated = consecEasyCorrect + 1;
-        if (updated === 2) {
+    const currentDiffLower = currentDifficulty.toLowerCase();
+
+    if (isCorrect) {
+      const updatedCorrect = newConsecEasy + 1;
+      newConsecHard = 0;
+
+      if (currentDiffLower === "easy") {
+        if (updatedCorrect === 2) {
+          nextDiff = "Medium";
+          newConsecEasy = 0;
+        } else {
+          newConsecEasy = updatedCorrect;
+        }
+      } else if (currentDiffLower === "medium") {
+        if (updatedCorrect === 2) {
           nextDiff = "Hard";
           newConsecEasy = 0;
         } else {
-          newConsecEasy = updated;
+          newConsecEasy = updatedCorrect;
         }
       } else {
-        newConsecEasy = 0;
+        newConsecEasy = updatedCorrect;
       }
-      newConsecHard = 0;
-    } else if (currentDiffLower === "hard") {
-      if (!isCorrect) {
-        const updated = consecHardWrong + 1;
-        if (updated === 2) {
+    } else {
+      const updatedWrong = newConsecHard + 1;
+      newConsecEasy = 0;
+
+      if (currentDiffLower === "hard") {
+        if (updatedWrong === 2) {
+          nextDiff = "Medium";
+          newConsecHard = 0;
+        } else {
+          newConsecHard = updatedWrong;
+        }
+      } else if (currentDiffLower === "medium") {
+        if (updatedWrong === 2) {
           nextDiff = "Easy";
           newConsecHard = 0;
         } else {
-          newConsecHard = updated;
+          newConsecHard = updatedWrong;
         }
       } else {
-        newConsecHard = 0;
+        newConsecHard = updatedWrong;
       }
-      newConsecEasy = 0;
     }
 
     setConsecEasyCorrect(newConsecEasy);
@@ -638,22 +655,30 @@ export default function StudentDashboardPage() {
     }
 
     // 3. Find next question matching difficulty
-    const nextQuestion = selectRandomQuestion(nextDiff, answeredIds);
+    let nextQuestion = selectRandomQuestion(nextDiff, answeredIds);
+    let finalDiff = nextDiff;
+
     if (!nextQuestion) {
-      const fallbackDiff = nextDiff === "Easy" ? "Hard" : "Easy";
-      const fallbackQuestion = selectRandomQuestion(fallbackDiff, answeredIds);
-      if (!fallbackQuestion) {
+      // Fallback chain: look at other difficulties if target is empty
+      const fallbacks = ["Easy", "Medium", "Hard"].filter(d => d !== nextDiff);
+      nextQuestion = selectRandomQuestion(fallbacks[0], answeredIds);
+      finalDiff = fallbacks[0];
+      
+      if (!nextQuestion && fallbacks[1]) {
+        nextQuestion = selectRandomQuestion(fallbacks[1], answeredIds);
+        finalDiff = fallbacks[1];
+      }
+
+      if (!nextQuestion) {
         addToast("No more questions available in the bank.", "error");
         handleSubmitTest(false, newScore);
         return;
       }
-      setCurrentQuestion(fallbackQuestion);
-      setAnsweredIds(prev => new Set([...prev, fallbackQuestion.Question]));
-      setCurrentDifficulty(fallbackDiff);
-    } else {
-      setCurrentQuestion(nextQuestion);
-      setAnsweredIds(prev => new Set([...prev, nextQuestion.Question]));
+      setCurrentDifficulty(finalDiff);
     }
+
+    setCurrentQuestion(nextQuestion);
+    setAnsweredIds(prev => new Set([...prev, nextQuestion.Question]));
 
     setCurrentQuestionNum(prev => prev + 1);
     setSelectedOption(null);
