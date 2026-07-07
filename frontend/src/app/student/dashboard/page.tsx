@@ -1055,14 +1055,24 @@ export default function StudentDashboardPage() {
                   const r = activeStudent[roundKey];
                   const formatLabel = roundKey === "round2" ? "90-second Reel / Short" : "60-second Demo Day film";
                   const roundLabel = roundKey === "round2" ? "Round 2" : "Round 3";
-                  const otherRoundLive = rounds[roundKey] !== "live";
+                  const roundStatus = rounds[roundKey] || "not-started";
 
-                  if (otherRoundLive) {
+                  if (roundStatus === "not-started") {
                     return (
                       <div className="empty">
                         <div className="ico">🔒</div>
                         <div className="t">{roundLabel} isn't open yet</div>
                         <p style={{ fontSize: 12.5 }}>Your College Admin will flag off {roundLabel} when it's time. Come back then to upload your {formatLabel}.</p>
+                      </div>
+                    );
+                  }
+
+                  if (roundStatus === "closed" && (r.status === "not-submitted" || r.status === "rejected")) {
+                    return (
+                      <div className="empty">
+                        <div className="ico">🔒</div>
+                        <div className="t">{roundLabel} is closed</div>
+                        <p style={{ fontSize: 12.5, color: "var(--slate-2)" }}>{roundLabel} is closed now. No further submissions will be accepted.</p>
                       </div>
                     );
                   }
