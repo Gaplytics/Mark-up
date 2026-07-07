@@ -224,7 +224,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const addToast = (msg: string, type?: "success" | "error", title?: string) => {
-    const id = Date.now();
+    const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
     setToasts(prev => [...prev, { id, msg, type, title }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));

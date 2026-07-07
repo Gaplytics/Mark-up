@@ -582,8 +582,6 @@ export default function JuryDashboardPage() {
                     </div>
                     
                     <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-                      <button className="btn btn-outline-coral btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "approved")}>✓ Approve</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleJurySubmissionAction(s.id, roundKey, "rejected")}>Request Changes</button>
                       <button className="btn btn-coral btn-sm" onClick={saveAndNext} disabled={!hasAllScores}>
                         Save & Next →
                       </button>
