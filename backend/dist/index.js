@@ -143,10 +143,15 @@ app.post('/api/colleges/validate', async (req, res) => {
 // Get all judges (joining with colleges table to resolve name)
 app.get('/api/judges', async (req, res) => {
     try {
-        const { data, error } = await supabase_1.supabaseAdmin
+        const { college_id } = req.query;
+        let query = supabase_1.supabaseAdmin
             .from('judges')
             .select('id, name, email, dept, college_id, slot_ids, colleges(name), created_at')
             .order('created_at', { ascending: false });
+        if (college_id) {
+            query = query.eq('college_id', college_id);
+        }
+        const { data, error } = await query;
         if (error) {
             console.error("GET /api/judges error:", error);
             return res.status(500).json({ success: false, error: error.message });
@@ -267,11 +272,12 @@ app.post('/api/judges', async (req, res) => {
         }
         // 3. Generate invite/recovery link
         // We must use 'recovery' because 'invite' attempts to CREATE the user, but we already created them above!
+        const frontendUrl = process.env.FRONTEND_URL || 'https://markup.gaplytiq.com';
         const { data: linkData, error: linkError } = await supabase_1.supabaseAdmin.auth.admin.generateLink({
             type: 'recovery',
             email,
             options: {
-                redirectTo: 'http://localhost:3000/jury/reset-password'
+                redirectTo: `${frontendUrl}/jury/reset-password`
             }
         });
         if (linkError) {
@@ -288,6 +294,12 @@ app.post('/api/judges', async (req, res) => {
                 const parsedSupabase = new URL(supabaseUrl);
                 parsedLink.protocol = parsedSupabase.protocol;
                 parsedLink.host = parsedSupabase.host;
+                // Also check if redirect_to query param has localhost and rewrite it
+                const redirectParam = parsedLink.searchParams.get('redirect_to');
+                if (redirectParam && redirectParam.includes('localhost:3000')) {
+                    const rewrittenRedirect = redirectParam.replace(/http:\/\/localhost:3000/g, frontendUrl);
+                    parsedLink.searchParams.set('redirect_to', rewrittenRedirect);
+                }
                 actionLink = parsedLink.toString();
             }
             catch (e) {
@@ -541,23 +553,26 @@ app.post('/api/student/verify-otp', async (req, res) => {
 // STUDENTS
 // =====================================
 async function sendSlotSelectionEmail(studentId, email, name) {
-    const selectUrl = `http://localhost:3000/student/select-slot?id=${studentId}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://markup.gaplytiq.com';
+    const selectUrl = `${frontendUrl}/student/select-slot?id=${studentId}`;
     const mailOptions = {
         from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
         to: email.trim().toLowerCase(),
         subject: 'Select Your MarkUp Test Slot',
-        text: `Hello ${name},\n\nPlease select your test slot for MarkUp by visiting this link: ${selectUrl}`,
+        text: `Hello ${name},\n\nYour college admin has registered you for the MarkUp competition. You can take your exam at https://markup.gaplytiq.com/.\n\nPlease select your test slot by visiting this link: ${selectUrl}`,
         html: `
-      <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; max-width: 500px; border-radius: 8px;">
-        <h2 style="color: #FF5A5F; margin-bottom: 20px;">Welcome to MarkUp!</h2>
+      <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #e2e8f0; max-width: 500px; border-radius: 12px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <h2 style="color: #FF5A5F; margin-bottom: 20px; font-size: 22px;">Welcome to MarkUp!</h2>
         <p>Hello <strong>${name}</strong>,</p>
-        <p>Your college admin has registered you for the MarkUp competition. To get started, please select your testing slot:</p>
-        <div style="text-align: center; margin: 25px 0;">
-          <a href="${selectUrl}" style="background-color: #FF5A5F; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Select Testing Slot</a>
+        <p>Your college admin has registered you for the MarkUp competition. You can take your exam at <a href="https://markup.gaplytiq.com/" style="color: #FF5A5F; text-decoration: underline;">https://markup.gaplytiq.com/</a>.</p>
+        <p>To get started, please select your testing slot by clicking the button below:</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${selectUrl}" style="background-color: #FF5A5F; color: white; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px -1px rgba(255, 90, 95, 0.2);">Select Testing Slot</a>
         </div>
-        <p>Or copy and paste this link into your browser:</p>
-        <p style="word-break: break-all; font-size: 13px; color: #555;"><a href="${selectUrl}">${selectUrl}</a></p>
-        <p style="font-size: 12px; color: #777; margin-top: 30px;">If you have any questions, please contact your College Admin.</p>
+        <p style="font-size: 12px; color: #64748b;">Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; font-size: 12px; color: #FF5A5F;"><a href="${selectUrl}" style="color: #FF5A5F; text-decoration: none;">${selectUrl}</a></p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #64748b; margin-top: 20px;">If you have any questions, please contact your College Admin.</p>
       </div>
     `
     };
@@ -1488,18 +1503,33 @@ const FALLBACK_QUESTIONS = [
 ];
 app.get('/api/questions', async (req, res) => {
     try {
+        console.log("GET /api/questions - Connecting to Supabase URL:", process.env.SUPABASE_URL);
         let { data, error } = await supabase_1.supabaseAdmin
             .from('Question_bank')
             .select('*');
+        if (error) {
+            console.error("GET /api/questions - Question_bank query failed:", error.message);
+        }
         // Try lowercase table name if first query returns empty or error
         if (error || !data || data.length === 0) {
+            console.log("GET /api/questions - Attempting fallback query on lowercase 'question_bank' table...");
             const fallbackQuery = await supabase_1.supabaseAdmin.from('question_bank').select('*');
+            if (fallbackQuery.error) {
+                console.error("GET /api/questions - lowercase 'question_bank' query failed:", fallbackQuery.error.message);
+            }
             if (fallbackQuery.data && fallbackQuery.data.length > 0) {
                 data = fallbackQuery.data;
                 error = null;
             }
         }
-        let finalQuestions = data && data.length > 0 ? data : FALLBACK_QUESTIONS;
+        let finalQuestions = data && data.length > 0 ? data : null;
+        if (!finalQuestions) {
+            console.warn("GET /api/questions - Database returned 0 questions or failed. USING HARDCODED FALLBACK_QUESTIONS!");
+            finalQuestions = FALLBACK_QUESTIONS;
+        }
+        else {
+            console.log(`GET /api/questions - Successfully fetched ${finalQuestions.length} questions from database.`);
+        }
         // Shuffle and return all questions
         const shuffled = [...finalQuestions].sort(() => 0.5 - Math.random());
         return res.json({ success: true, data: shuffled });

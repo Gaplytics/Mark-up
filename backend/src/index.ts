@@ -299,11 +299,12 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
 
     // 3. Generate invite/recovery link
     // We must use 'recovery' because 'invite' attempts to CREATE the user, but we already created them above!
+    const frontendUrl = process.env.FRONTEND_URL || 'https://markup.gaplytiq.com';
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
       options: {
-        redirectTo: 'http://localhost:3000/jury/reset-password'
+        redirectTo: `${frontendUrl}/jury/reset-password`
       }
     });
 
@@ -323,6 +324,14 @@ app.post('/api/judges', async (req: Request, res: Response): Promise<any> => {
         const parsedSupabase = new URL(supabaseUrl);
         parsedLink.protocol = parsedSupabase.protocol;
         parsedLink.host = parsedSupabase.host;
+
+        // Also check if redirect_to query param has localhost and rewrite it
+        const redirectParam = parsedLink.searchParams.get('redirect_to');
+        if (redirectParam && redirectParam.includes('localhost:3000')) {
+          const rewrittenRedirect = redirectParam.replace(/http:\/\/localhost:3000/g, frontendUrl);
+          parsedLink.searchParams.set('redirect_to', rewrittenRedirect);
+        }
+
         actionLink = parsedLink.toString();
       } catch (e) {
         console.error("Could not parse actionLink for rewriting:", e);
