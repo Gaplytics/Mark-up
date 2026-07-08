@@ -1167,8 +1167,7 @@ export default function StudentDashboardPage() {
                     return (
                       <div className="empty">
                         <div className="ico">🎉</div>
-                        <div className="t">Your {formatLabel} was approved!</div>
-                        <p style={{ fontSize: 12.5, marginBottom: 16 }}>Score from jury: <b>{r.juryScore !== null ? r.juryScore + "/10" : "Pending"}</b></p>
+                        <div className="t">Your {formatLabel} was reviewed!</div>
                         {r.link && (
                           <div style={{ width: "100%", maxWidth: "500px", margin: "0 auto" }}>
                             {renderVideoEmbed(r.link)}
