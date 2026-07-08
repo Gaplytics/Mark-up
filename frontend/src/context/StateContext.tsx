@@ -232,9 +232,15 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    const targetCollegeId = collegeAdminId || currentJury?.collegeId || currentStudent?.collegeId;
+    
     const fetchJudges = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`);
+        const url = targetCollegeId 
+          ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges?college_id=${encodeURIComponent(targetCollegeId)}`
+          : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/judges`;
+          
+        const res = await fetch(url);
         const json = await res.json();
         if (json.success) {
           setJudges(json.data);
@@ -244,7 +250,7 @@ export function StateProvider({ children }: { children: React.ReactNode }) {
       }
     };
     fetchJudges();
-  }, []);
+  }, [collegeAdminId, currentJury?.collegeId, currentStudent?.collegeId]);
 
   useEffect(() => {
     const fetchSlots = async () => {

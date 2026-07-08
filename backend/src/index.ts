@@ -155,10 +155,17 @@ app.post('/api/colleges/validate', async (req: Request, res: Response): Promise<
 // Get all judges (joining with colleges table to resolve name)
 app.get('/api/judges', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { college_id } = req.query;
+    let query = supabaseAdmin
       .from('judges')
       .select('id, name, email, dept, college_id, slot_ids, colleges(name), created_at')
       .order('created_at', { ascending: false });
+
+    if (college_id) {
+      query = query.eq('college_id', college_id);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("GET /api/judges error:", error);
