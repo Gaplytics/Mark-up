@@ -600,6 +600,80 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            {/* Gaplytiq Promo Banner */}
+            <a 
+              href="https://gaplytiq.com/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              style={{ 
+                textDecoration: "none",
+                display: "block"
+              }}
+            >
+              <div 
+                style={{ 
+                  background: "radial-gradient(circle at top left, rgba(79, 70, 229, 0.15) 0%, rgba(255, 94, 54, 0.05) 50%, rgba(255, 255, 255, 0.01) 100%)",
+                  border: "1px solid rgba(79, 70, 229, 0.3)",
+                  borderRadius: "24px",
+                  padding: "28px",
+                  backdropFilter: "blur(20px)",
+                  boxShadow: "0 20px 45px rgba(79, 70, 229, 0.1)",
+                  position: "relative",
+                  overflow: "hidden",
+                  transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+                }}
+                onMouseEnter={(e) => { 
+                  e.currentTarget.style.transform = "translateY(-4px)"; 
+                  e.currentTarget.style.borderColor = "rgba(79, 70, 229, 0.6)";
+                  e.currentTarget.style.boxShadow = "0 25px 50px rgba(79, 70, 229, 0.2)";
+                }}
+                onMouseLeave={(e) => { 
+                  e.currentTarget.style.transform = "translateY(0)"; 
+                  e.currentTarget.style.borderColor = "rgba(79, 70, 229, 0.3)";
+                  e.currentTarget.style.boxShadow = "0 20px 45px rgba(79, 70, 229, 0.1)";
+                }}
+              >
+                {/* Glowing decorative background orb */}
+                <div style={{
+                  position: "absolute",
+                  top: "-40px",
+                  right: "-40px",
+                  width: "120px",
+                  height: "120px",
+                  background: "radial-gradient(circle, rgba(79, 70, 229, 0.4) 0%, transparent 70%)",
+                  filter: "blur(20px)",
+                  pointerEvents: "none"
+                }} />
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                  <span style={{ fontSize: "10px", background: "linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%)", color: "#FFFFFF", padding: "4px 10px", borderRadius: "12px", fontWeight: "800", letterSpacing: "1px", textTransform: "uppercase" }}>
+                    🚀 Free Resource
+                  </span>
+                </div>
+
+                <h3 style={{ fontSize: "18px", fontWeight: "900", color: "#FFFFFF", marginBottom: "10px", lineHeight: "1.3" }}>
+                  Supercharge Your Career on Gaplytiq
+                </h3>
+
+                <p style={{ fontSize: "12.5px", color: "#B9C6EB", lineHeight: "1.55", marginBottom: "20px" }}>
+                  Build a professional ATS-friendly resume, take industry skill tests, and get a detailed skill gap analysis—all <strong>100% free</strong>.
+                </p>
+
+                <div style={{ 
+                  display: "inline-flex", 
+                  alignItems: "center", 
+                  gap: "8px", 
+                  background: "#4F46E5", 
+                  color: "#FFFFFF", 
+                  padding: "10px 20px", 
+                  borderRadius: "10px", 
+                  fontWeight: "800", 
+                  fontSize: "13px"
+                }}>
+                  Get Started on Gaplytiq <span>→</span>
+                </div>
+              </div>
+            </a>
           </div>
         </section>
 
