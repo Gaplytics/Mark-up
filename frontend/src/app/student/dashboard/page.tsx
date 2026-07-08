@@ -129,6 +129,17 @@ export default function StudentDashboardPage() {
 
     let localWarningCount = 0;
     let lastViolationTime = 0;
+    // Suppresses blur/resize violations during fullscreen transitions
+    let fullscreenTransitioning = false;
+    let fullscreenTransitionTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const setFullscreenTransition = () => {
+      fullscreenTransitioning = true;
+      if (fullscreenTransitionTimeout) clearTimeout(fullscreenTransitionTimeout);
+      fullscreenTransitionTimeout = setTimeout(() => {
+        fullscreenTransitioning = false;
+      }, 1500);
+    };
 
     const handleViolation = (reason: string = "Proctoring violation detected") => {
       if (isDisqualified) return;
@@ -284,10 +295,16 @@ export default function StudentDashboardPage() {
     };
 
     const handleBlur = () => {
+      // Don't count blur during fullscreen transitions (browser fires blur
+      // when showing the fullscreen permission prompt or entering fullscreen)
+      if (fullscreenTransitioning) return;
       handleViolation("Exam window lost focus (Window Blur / App Switch)");
     };
 
     const handleFullscreenChange = () => {
+      // Mark a transition so that the resize event fired simultaneously
+      // by the browser exiting fullscreen doesn't double-count as a violation
+      setFullscreenTransition();
       if (!document.fullscreenElement) {
         setShowFullscreenRequired(true);
         handleViolation("Exited Fullscreen Mode");
@@ -297,9 +314,11 @@ export default function StudentDashboardPage() {
     };
 
     const handleResize = () => {
+      // Ignore resize events that fire as part of a fullscreen transition
+      if (fullscreenTransitioning) return;
       if (!document.fullscreenElement) {
         setShowFullscreenRequired(true);
-        handleViolation("Window resized / Exited Fullscreen");
+        handleViolation("Window resized outside fullscreen");
       }
     };
 
@@ -445,13 +464,27 @@ export default function StudentDashboardPage() {
       return;
     }
 
-    // Request fullscreen immediately to preserve the user gesture token
+    // Request fullscreen immediately to preserve the user gesture token.
+    // We intentionally do NOT treat a fullscreen failure as a blocking error —
+    // some browsers (e.g., Firefox in certain contexts) may silently refuse.
     try {
       if (document.documentElement.requestFullscreen) {
+        // Signal listeners to suppress blur/resize violations during this transition
+        document.documentElement.dataset.fsTransition = "1";
         await document.documentElement.requestFullscreen();
+        delete document.documentElement.dataset.fsTransition;
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        // Safari fallback
+        await (document.documentElement as any).webkitRequestFullscreen();
+      } else if ((document.documentElement as any).mozRequestFullScreen) {
+        // Firefox fallback (legacy)
+        await (document.documentElement as any).mozRequestFullScreen();
+      } else if ((document.documentElement as any).msRequestFullscreen) {
+        // IE/Edge fallback
+        await (document.documentElement as any).msRequestFullscreen();
       }
     } catch (err) {
-      console.error("Fullscreen request failed", err);
+      console.warn("Fullscreen request was denied or failed — continuing anyway:", err);
     }
 
     setIsLoadingQuestions(true);
@@ -737,8 +770,14 @@ export default function StudentDashboardPage() {
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
-        setShowFullscreenRequired(false);
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        await (document.documentElement as any).webkitRequestFullscreen();
+      } else if ((document.documentElement as any).mozRequestFullScreen) {
+        await (document.documentElement as any).mozRequestFullScreen();
+      } else if ((document.documentElement as any).msRequestFullscreen) {
+        await (document.documentElement as any).msRequestFullscreen();
       }
+      setShowFullscreenRequired(false);
     } catch (err) {
       console.error("Failed to re-enter fullscreen:", err);
     }
