@@ -3,9 +3,200 @@
 import React, { useState } from "react";
 import Link from "next/link";
 
+// Custom Premium SVG Icons replacing Emojis
+const BrainIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1 0-3.12 3.014 3.014 0 0 1-.14-3.88 2.5 2.5 0 0 1 2.6-4.56A2.5 2.5 0 0 1 9.5 2z" />
+    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 0-3.12 3.014 3.014 0 0 0 .14-3.88 2.5 2.5 0 0 0-2.6-4.56A2.5 2.5 0 0 0 14.5 2z" />
+    <path d="M12 5v14" />
+    <path d="M12 12h6" />
+    <path d="M12 12H6" />
+  </svg>
+);
+
+const ClapperboardIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M20.2 6 3 11l-.9-2.4 17.2-5.1Z" />
+    <path d="M4 11V9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2" />
+    <path d="M2 11h20" />
+    <path d="M2 17h20" />
+    <path d="M2 14h20" />
+    <rect x="2" y="11" width="20" height="10" rx="2" />
+  </svg>
+);
+
+const MegaphoneIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="m3 11 18-5v12L3 13v-2Z" />
+    <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+  </svg>
+);
+
+const LightbulbIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A5 5 0 0 0 8 8c0 1 .3 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+  </svg>
+);
+
+const TrendingUpIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+    <polyline points="16 7 22 7 22 13" />
+  </svg>
+);
+
+const CalendarIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+    <line x1="16" x2="16" y1="2" y2="6" />
+    <line x1="8" x2="8" y1="2" y2="6" />
+    <line x1="3" x2="21" y1="10" y2="10" />
+  </svg>
+);
+
+const MapPinIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+
+const UsersIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const GraduationCapIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
+    <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5" />
+  </svg>
+);
+
+const SchoolIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+    <line x1="9" y1="22" x2="9" y2="16" />
+    <line x1="15" y1="22" x2="15" y2="16" />
+    <line x1="9" y1="16" x2="15" y2="16" />
+    <path d="M8 6h2v2H8V6zm6 0h2v2h-2V6zm-6 5h2v2H8v-2zm6 0h2v2h-2v-2z" />
+  </svg>
+);
+
+const ScaleIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+    <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" />
+    <path d="M7 21h10" />
+    <path d="M12 3v18" />
+    <path d="M3 7h18" />
+  </svg>
+);
+
+const ClipboardIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+  </svg>
+);
+
+const BarChartIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <line x1="18" x2="18" y1="20" y2="10" />
+    <line x1="12" x2="12" y1="20" y2="4" />
+    <line x1="6" x2="6" y1="20" y2="14" />
+  </svg>
+);
+
+const TargetIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="12" r="6" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
+
+const PencilIcon = ({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
+
+const CheckIcon = ({ size = 16, ...props }: React.SVGProps<SVGSVGElement> & { size?: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+// Map emoji to SVG component
+const getEmojiIcon = (emoji: string, size: number = 24, props: React.SVGProps<SVGSVGElement> = {}) => {
+  switch (emoji) {
+    case "🧠": return <BrainIcon size={size} {...props} />;
+    case "🎬": return <ClapperboardIcon size={size} {...props} />;
+    case "📢": return <MegaphoneIcon size={size} {...props} />;
+    case "💡": return <LightbulbIcon size={size} {...props} />;
+    case "📈": return <TrendingUpIcon size={size} {...props} />;
+    case "📅": return <CalendarIcon size={size} {...props} />;
+    case "📍": return <MapPinIcon size={size} {...props} />;
+    case "👥": return <UsersIcon size={size} {...props} />;
+    case "🎓": return <GraduationCapIcon size={size} {...props} />;
+    case "🏫": return <SchoolIcon size={size} {...props} />;
+    case "⚖️": return <ScaleIcon size={size} {...props} />;
+    case "📋": return <ClipboardIcon size={size} {...props} />;
+    case "📊": return <BarChartIcon size={size} {...props} />;
+    case "🎯": return <TargetIcon size={size} {...props} />;
+    case "✏️": return <PencilIcon size={size} {...props} />;
+    default: return null;
+  }
+};
+
 export default function LandingPage() {
   const [activeRound, setActiveRound] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const courses = [
+    {
+      title: "MBA in Business Analytics",
+      description: "Master Data-Driven Decision Making",
+      url: "https://academy.dalai.in/courses/mba-business-analytics",
+      badge: "Analytics",
+      accent: "#FF5E36"
+    },
+    {
+      title: "Data Analytics & AI",
+      description: "Unleash the Power of Machine Learning",
+      url: "https://academy.dalai.in/courses/data-analytics-ai",
+      badge: "AI & ML",
+      accent: "#4F46E5"
+    },
+    {
+      title: "D2C E-commerce",
+      description: "Build & Scale Digital Native Brands",
+      url: "https://academy.dalai.in/courses/d2c-ecommerce",
+      badge: "E-Commerce",
+      accent: "#10B981"
+    },
+    {
+      title: "Performance Marketing",
+      description: "Drive High-ROI Growth Campaigns",
+      url: "https://academy.dalai.in/courses/performance-marketing",
+      badge: "Marketing",
+      accent: "#EC4899"
+    },
+    {
+      title: "AI Edge Program",
+      description: "Stay Ahead with Generative AI Tools",
+      url: "https://academy.dalai.in/courses/ai-edge",
+      badge: "Generative AI",
+      accent: "#F59E0B"
+    }
+  ];
 
   const rounds = [
     {
@@ -28,9 +219,9 @@ export default function LandingPage() {
     },
     {
       id: 2,
-      number: "Day 2 – 14 | Round 2",
+      number: "Day 2 | Round 2",
       title: "90 SECOND REEL CHALLENGE",
-      date: "9 – 14 July 2026",
+      date: "10 July 2026",
       desc: "Teams conceptualize, script, shoot, edit, and post a high-conversion 90-second marketing video creative to test real-world social engagement and storytelling capabilities.",
       points: [
         "Product Launch & Teaser Video: Generating hype for a new concept.",
@@ -47,7 +238,7 @@ export default function LandingPage() {
       id: 3,
       number: "Day 3 | Demo Day",
       title: "CAMPAIGN SHOWCASE & JURY PITCH",
-      date: "15 July 2026",
+      date: "11 July 2026",
       desc: "The Grand Finale of MarkUp 2026. Selected finalist teams pitch their comprehensive end-to-end marketing campaign strategy to an expert industry jury panel.",
       points: [
         "Campaign Objective & Target Persona Profile: Clear demographic and psychographic targeting.",
@@ -165,6 +356,19 @@ export default function LandingPage() {
           background: #FF5E36;
           animation: drawLine 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+        @keyframes scrollMarquee {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(calc(-50% - 6px)); }
+        }
+        .marquee-vertical {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          animation: scrollMarquee 15s linear infinite;
+        }
+        .marquee-vertical:hover {
+          animation-play-state: paused;
+        }
       `}} />
 
       {/* Decorative Background Glows */}
@@ -212,9 +416,7 @@ export default function LandingPage() {
         {/* Navigation Header */}
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 0", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
           <div className="brand" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, #FF5E36, #4F46E5)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 15px rgba(255, 94, 54, 0.25)" }}>
-              <img src="/logo-icon.png" alt="Logo" style={{ width: "22px", height: "22px", objectFit: "contain", filter: "brightness(0) invert(1)" }} />
-            </div>
+            <img src="/logo-icon.png" alt="Logo" style={{ width: "38px", height: "38px", objectFit: "contain" }} />
             <div>
               <div style={{ fontSize: "20px", fontWeight: "900", color: "#FFFFFF", display: "flex", alignItems: "center" }}>
                 MarkUp <span style={{ color: "#FF5E36", fontSize: "11px", fontWeight: "800", marginLeft: "6px", background: "rgba(255,94,54,0.12)", padding: "2px 6px", borderRadius: "4px" }}>2026</span>
@@ -224,16 +426,17 @@ export default function LandingPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "rgba(255, 255, 255, 0.03)", padding: "6px 16px", borderRadius: "100px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
-              <img src="/allianceuniversity.png" alt="Alliance University" style={{ height: "30px", objectFit: "contain" }} />
-              <div style={{ width: "1px", height: "18px", background: "rgba(255, 255, 255, 0.15)" }}></div>
-              <img src="/gaplytiq.png" alt="Gaplytiq" style={{ height: "45px", objectFit: "contain" }} />
+            <img src="/allianceuniversity.png" alt="Alliance University" style={{ height: "45px", objectFit: "contain" }} />
+            <div style={{ width: "1px", height: "18px", background: "rgba(255, 255, 255, 0.15)" }}></div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <img src="/logo-icon.png" alt="Gaplytiq Icon" style={{ width: "24px", height: "24px", objectFit: "contain" }} />
+              <span style={{ fontSize: "18px", fontWeight: "800", color: "#FFFFFF", letterSpacing: "-0.5px" }}>Gaplytiq</span>
             </div>
           </div>
         </header>
 
         {/* Hero Section */}
-        <section className="animate-slideup" style={{ display: "grid", gridTemplateColumns: "1.25fr 0.75fr", gap: "50px", padding: "80px 0 60px", alignItems: "center" }}>
+        <section className="animate-slideup" style={{ display: "grid", gridTemplateColumns: "1.25fr 0.75fr", gap: "50px", padding: "80px 0 60px", alignItems: "flex-start" }}>
           <div>
             <div className="eyebrow" style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(255, 94, 54, 0.08)", padding: "6px 14px", borderRadius: "100px", border: "1px solid rgba(255, 94, 54, 0.2)", marginBottom: "24px" }}>
               <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#FF5E36", boxShadow: "0 0 8px #FF5E36" }}></span>
@@ -260,60 +463,142 @@ export default function LandingPage() {
             <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
               <Link href="/student/login" style={{ textDecoration: "none" }}>
                 <button style={{ background: "linear-gradient(135deg, #FF5E36 0%, #FF2E93 100%)", color: "#FFFFFF", border: "none", padding: "16px 32px", borderRadius: "14px", fontWeight: "800", fontSize: "15.5px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 6px 25px rgba(255, 94, 54, 0.35)", transition: "transform 0.2s, box-shadow 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(255, 94, 54, 0.5)"; }} onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 6px 25px rgba(255, 94, 54, 0.35)"; }}>
-                  🎓 Student Sign In
+                  <GraduationCapIcon size={20} /> Student Sign In
                 </button>
               </Link>
               <Link href="/college/login" style={{ textDecoration: "none" }}>
-                <button style={{ background: "rgba(255, 255, 255, 0.04)", color: "#FFFFFF", border: "1px solid rgba(255, 255, 255, 0.12)", padding: "16px 28px", borderRadius: "14px", fontWeight: "700", fontSize: "15px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                  🏫 College Admin
+                <button style={{ background: "rgba(255, 255, 255, 0.04)", color: "#FFFFFF", border: "1px solid rgba(255, 255, 255, 0.12)", padding: "16px 28px", borderRadius: "14px", fontWeight: "700", fontSize: "15px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                  <SchoolIcon size={18} /> College Admin
                 </button>
               </Link>
               <Link href="/jury/login" style={{ textDecoration: "none" }}>
-                <button style={{ background: "rgba(255, 255, 255, 0.04)", color: "#FFFFFF", border: "1px solid rgba(255, 255, 255, 0.12)", padding: "16px 28px", borderRadius: "14px", fontWeight: "700", fontSize: "15px", cursor: "pointer", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; e.currentTarget.style.transform = "translateY(0)"; }}>
-                  ⚖️ Jury Panel
+                <button style={{ background: "rgba(255, 255, 255, 0.04)", color: "#FFFFFF", border: "1px solid rgba(255, 255, 255, 0.12)", padding: "16px 28px", borderRadius: "14px", fontWeight: "700", fontSize: "15px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.04)"; e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+                  <ScaleIcon size={18} /> Jury Panel
                 </button>
               </Link>
             </div>
-          </div>
-
-          {/* Quick Info Box (Flyer-inspired) */}
-          <div className="animate-float" style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "24px", padding: "35px", backdropFilter: "blur(20px)", boxShadow: "0 20px 45px rgba(0, 0, 0, 0.4)", position: "relative" }}>
-            <div style={{ position: "absolute", top: "-15px", right: "20px", background: "linear-gradient(135deg, #FF5E36, #FF2E93)", color: "#FFFFFF", fontWeight: "900", fontSize: "11px", padding: "4px 14px", borderRadius: "20px", letterSpacing: "1px" }}>REGISTRATION LIVE</div>
-            
-            <h3 style={{ fontSize: "20px", fontWeight: "800", color: "#FFFFFF", marginBottom: "25px", display: "flex", alignItems: "center", gap: "8px" }}>
-              📋 Quick Overview
-            </h3>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "22px" }}>
-              <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(226, 135, 67, 0.12)", color: "#E28743", display: "flex", alignItems: "center", fontSize: "20px", flexShrink: 0, justifyContent: "center" }}>📅</div>
+            {/* Quick Overview horizontal row (covers the left area under CTAs) */}
+            <div style={{ 
+              display: "flex", 
+              gap: "30px", 
+              marginTop: "48px", 
+              paddingTop: "32px", 
+              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+              flexWrap: "wrap"
+            }}>
+              <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flex: "1 1 200px" }}>
+                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(226, 135, 67, 0.12)", color: "#E28743", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <CalendarIcon size={20} />
+                </div>
                 <div>
                   <div style={{ fontSize: "14px", fontWeight: "800", color: "#FFFFFF" }}>8th – 11th July 2026</div>
                   <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "3px" }}>Intense 5-day competitive format</div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(79, 70, 229, 0.12)", color: "#818CF8", display: "flex", alignItems: "center", fontSize: "20px", flexShrink: 0, justifyContent: "center" }}>📍</div>
+              <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flex: "1 1 200px" }}>
+                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(79, 70, 229, 0.12)", color: "#818CF8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <MapPinIcon size={20} />
+                </div>
                 <div>
                   <div style={{ fontSize: "14px", fontWeight: "800", color: "#FFFFFF" }}>Alliance University campus</div>
-                  <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "3px" }}>Open to all registered university departments</div>
+                  <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "3px" }}>Open to all departments</div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
-                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(255, 94, 54, 0.12)", color: "#FF5E36", display: "flex", alignItems: "center", fontSize: "20px", flexShrink: 0, justifyContent: "center" }}>👥</div>
+              <div style={{ display: "flex", gap: "14px", alignItems: "flex-start", flex: "1 1 200px" }}>
+                <div style={{ width: "42px", height: "42px", borderRadius: "10px", background: "rgba(255, 94, 54, 0.12)", color: "#FF5E36", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <UsersIcon size={20} />
+                </div>
                 <div>
                   <div style={{ fontSize: "14px", fontWeight: "800", color: "#FFFFFF" }}>Teams of 1 to 5 members</div>
-                  <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "3px" }}>Collaborate or complete solo assessments</div>
+                  <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "3px" }}>Collaborate or complete solo</div>
                 </div>
               </div>
             </div>
 
-            <div style={{ borderTop: "1px solid rgba(255, 255, 255, 0.08)", marginTop: "30px", paddingTop: "24px", display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "800", color: "#E28743", letterSpacing: "1px" }}>
-              <span>💡 THINK</span>
-              <span>✏️ CREATE</span>
-              <span>📢 PITCH</span>
+            {/* THINK CREATE PITCH Tagline */}
+            <div style={{ 
+              marginTop: "24px", 
+              display: "flex", 
+              gap: "24px", 
+              fontSize: "11px", 
+              fontWeight: "900", 
+              color: "#E28743", 
+              letterSpacing: "2.5px" 
+            }}>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px" }}><LightbulbIcon size={14} /> THINK</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px" }}><PencilIcon size={14} /> CREATE</span>
+              <span style={{ display: "flex", alignItems: "center", gap: "6px" }}><MegaphoneIcon size={14} /> PITCH</span>
+            </div>
+          </div>
+
+          {/* Right Side Column */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            {/* Automatic Scrolling Course Banner (Vertical Ads Marquee) */}
+            <div style={{ 
+              background: "rgba(255, 255, 255, 0.02)", 
+              border: "1px solid rgba(255, 255, 255, 0.08)", 
+              borderRadius: "24px", 
+              padding: "25px", 
+              backdropFilter: "blur(20px)", 
+              boxShadow: "0 20px 45px rgba(0, 0, 0, 0.4)",
+              position: "relative",
+              overflow: "hidden"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+                <span style={{ fontSize: "11px", fontWeight: "800", letterSpacing: "1.5px", textTransform: "uppercase", color: "#FF5E36" }}>Specialized Programs</span>
+              </div>
+
+              {/* Vertical Scroll Window (Taller to act as billboard sidebar) */}
+              <div style={{ width: "100%", height: "360px", overflow: "hidden", position: "relative" }}>
+                <div className="marquee-vertical">
+                  {[...courses, ...courses].map((course, idx) => (
+                    <a 
+                      key={idx} 
+                      href={course.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      style={{ 
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        padding: "12px 16px",
+                        borderRadius: "12px",
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                        textDecoration: "none",
+                        color: "#FFFFFF",
+                        transition: "all 0.2s ease-in-out",
+                        cursor: "pointer"
+                      }}
+                      onMouseEnter={(e) => { 
+                        e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; 
+                        e.currentTarget.style.borderColor = "var(--coral)";
+                        e.currentTarget.style.transform = "translateY(-1px)";
+                      }}
+                      onMouseLeave={(e) => { 
+                        e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)"; 
+                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.06)";
+                        e.currentTarget.style.transform = "translateY(0)";
+                      }}
+                    >
+                      {/* Left color tag line */}
+                      <div style={{ width: "3px", height: "30px", borderRadius: "1.5px", background: course.accent, flexShrink: 0 }} />
+                      
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: "9px", fontWeight: "800", textTransform: "uppercase", color: course.accent, letterSpacing: "0.5px" }}>
+                          {course.badge}
+                        </span>
+                        <h4 style={{ fontSize: "13px", fontWeight: "800", margin: "1px 0 0 0", color: "#FFFFFF", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {course.title}
+                        </h4>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.3)", paddingLeft: "4px" }}>→</div>
+                    </a>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -321,21 +606,27 @@ export default function LandingPage() {
         {/* Feature Icons Bar */}
         <section style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px", padding: "40px 0", borderTop: "1px solid rgba(255, 255, 255, 0.06)", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-            <div style={{ fontSize: "36px" }}>🧠</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "54px", height: "54px", borderRadius: "14px", background: "rgba(226, 135, 67, 0.08)", border: "1px solid rgba(226, 135, 67, 0.2)", flexShrink: 0 }}>
+              <BrainIcon size={28} style={{ color: "#E28743" }} />
+            </div>
             <div>
               <div style={{ fontWeight: "800", fontSize: "16px", color: "#FFFFFF" }}>Showcase Creativity</div>
               <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "2px" }}>Push concepts to maximum brand recall.</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-            <div style={{ fontSize: "36px" }}>📊</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "54px", height: "54px", borderRadius: "14px", background: "rgba(129, 140, 248, 0.08)", border: "1px solid rgba(129, 140, 248, 0.2)", flexShrink: 0 }}>
+              <BarChartIcon size={28} style={{ color: "#818CF8" }} />
+            </div>
             <div>
               <div style={{ fontWeight: "800", fontSize: "16px", color: "#FFFFFF" }}>Test Marketing Aptitude</div>
               <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "2px" }}>Evaluate scenario analysis under time limits.</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-            <div style={{ fontSize: "36px" }}>📢</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "54px", height: "54px", borderRadius: "14px", background: "rgba(255, 94, 54, 0.08)", border: "1px solid rgba(255, 94, 54, 0.2)", flexShrink: 0 }}>
+              <MegaphoneIcon size={28} style={{ color: "#FF5E36" }} />
+            </div>
             <div>
               <div style={{ fontWeight: "800", fontSize: "16px", color: "#FFFFFF" }}>Pitch to Real Brands</div>
               <div style={{ fontSize: "13px", color: "#94A3B8", marginTop: "2px" }}>Defend campaign structures to the expert jury.</div>
@@ -388,7 +679,7 @@ export default function LandingPage() {
                 {rounds[activeRound].title}
               </h3>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#E28743", fontWeight: "800", fontSize: "14.5px", marginBottom: "20px" }}>
-                <span>📅 Timeline: {rounds[activeRound].date}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}><CalendarIcon size={16} /> Timeline: {rounds[activeRound].date}</span>
               </div>
               <p style={{ fontSize: "15.5px", color: "#AEB9E1", lineHeight: "1.65", marginBottom: "24px" }}>
                 {rounds[activeRound].desc}
@@ -423,18 +714,18 @@ export default function LandingPage() {
 
             <div style={{ background: "rgba(255, 255, 255, 0.015)", border: "1px solid rgba(255, 255, 255, 0.04)", borderRadius: "20px", padding: "30px", position: "relative" }}>
               <h4 style={{ fontSize: "16px", fontWeight: "800", color: "#FFFFFF", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
-                🎯 Focus Areas & Topics:
+                <TargetIcon size={18} style={{ color: rounds[activeRound].accent }} /> Focus Areas & Topics:
               </h4>
               <ul style={{ listStyleType: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "14px" }}>
                 {rounds[activeRound].points.map((pt, i) => (
                   <li key={i} style={{ display: "flex", gap: "12px", alignItems: "flex-start", fontSize: "14.5px", color: "#AEB9E1" }}>
-                    <span style={{ color: rounds[activeRound].accent, fontWeight: "bold" }}>✓</span>
+                    <span style={{ color: rounds[activeRound].accent, display: "flex", alignItems: "center", paddingTop: "2px" }}><CheckIcon size={14} /></span>
                     <span>{pt}</span>
                   </li>
                 ))}
               </ul>
-              <div style={{ fontSize: "90px", position: "absolute", bottom: "10px", right: "20px", opacity: 0.07, pointerEvents: "none" }}>
-                {rounds[activeRound].icon}
+              <div style={{ position: "absolute", bottom: "10px", right: "20px", opacity: 0.07, pointerEvents: "none", color: rounds[activeRound].accent }}>
+                {getEmojiIcon(rounds[activeRound].icon, 90)}
               </div>
             </div>
           </div>
@@ -456,7 +747,9 @@ export default function LandingPage() {
             {criteria.map((c, i) => (
               <div key={i} style={{ background: "rgba(255, 255, 255, 0.01)", border: `1px solid ${c.border}`, borderRadius: "18px", padding: "26px", transition: "transform 0.25s, background-color 0.25s" }} onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-5px)"; e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.035)"; }} onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.01)"; }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                  <span style={{ fontSize: "30px" }}>{c.icon}</span>
+                  <span style={{ display: "flex", alignItems: "center", color: c.border.replace("0.3", "0.85") }}>
+                    {getEmojiIcon(c.icon, 28)}
+                  </span>
                   <span style={{ background: c.color, border: `1px solid ${c.border}`, color: "#FFFFFF", fontWeight: "800", fontSize: "13px", padding: "3px 9px", borderRadius: "6px" }}>{c.percentage}</span>
                 </div>
                 <h3 style={{ fontSize: "17px", fontWeight: "800", color: "#FFFFFF", marginBottom: "12px" }}>{c.title}</h3>

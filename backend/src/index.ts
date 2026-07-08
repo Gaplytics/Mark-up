@@ -1633,20 +1633,36 @@ const FALLBACK_QUESTIONS = [
 
 app.get('/api/questions', async (req: Request, res: Response): Promise<any> => {
   try {
+    console.log("GET /api/questions - Connecting to Supabase URL:", process.env.SUPABASE_URL);
     let { data, error } = await supabaseAdmin
       .from('Question_bank')
       .select('*');
 
+    if (error) {
+      console.error("GET /api/questions - Question_bank query failed:", error.message);
+    }
+
     // Try lowercase table name if first query returns empty or error
     if (error || !data || data.length === 0) {
+      console.log("GET /api/questions - Attempting fallback query on lowercase 'question_bank' table...");
       const fallbackQuery = await supabaseAdmin.from('question_bank').select('*');
+      if (fallbackQuery.error) {
+        console.error("GET /api/questions - lowercase 'question_bank' query failed:", fallbackQuery.error.message);
+      }
       if (fallbackQuery.data && fallbackQuery.data.length > 0) {
         data = fallbackQuery.data;
         error = null;
       }
     }
 
-    let finalQuestions = data && data.length > 0 ? data : FALLBACK_QUESTIONS;
+    let finalQuestions = data && data.length > 0 ? data : null;
+    
+    if (!finalQuestions) {
+      console.warn("GET /api/questions - Database returned 0 questions or failed. USING HARDCODED FALLBACK_QUESTIONS!");
+      finalQuestions = FALLBACK_QUESTIONS;
+    } else {
+      console.log(`GET /api/questions - Successfully fetched ${finalQuestions.length} questions from database.`);
+    }
 
     // Shuffle and return all questions
     const shuffled = [...finalQuestions].sort(() => 0.5 - Math.random());

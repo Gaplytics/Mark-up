@@ -1404,23 +1404,32 @@ export default function CollegeDashboardPage() {
                     <input className="input" placeholder="e.g. Marketing" value={newJudgeDept} onChange={(e) => setNewJudgeDept(e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label>Assigned Slots (to review submissions)</label>
+                    <label style={{ display: 'block', marginBottom: '8px' }}>Assigned Slots (to review submissions)</label>
                     <div style={{ 
                       display: "flex", 
-                      flexDirection: "column", 
-                      gap: "10px", 
-                      marginTop: "8px", 
-                      maxHeight: "180px", 
-                      overflowY: "auto", 
-                      border: "1px solid var(--line)", 
-                      padding: "12px", 
-                      borderRadius: "8px",
-                      background: "#fff"
+                      flexWrap: "wrap", 
+                      gap: "8px" 
                     }}>
+                      {slots.length === 0 && (
+                        <span style={{ fontSize: "13px", color: "var(--slate-2)", fontStyle: "italic" }}>No slots available</span>
+                      )}
                       {slots.map(s => {
                         const checked = newJudgeSlots.includes(s.id);
                         return (
-                          <label key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "normal" }}>
+                          <label key={s.id} style={{ 
+                            display: "inline-flex", 
+                            alignItems: "center", 
+                            gap: "6px", 
+                            cursor: "pointer", 
+                            fontSize: "13px", 
+                            fontWeight: checked ? 600 : 400,
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            border: `1px solid ${checked ? "var(--coral)" : "var(--line)"}`,
+                            background: checked ? "rgba(255, 94, 54, 0.1)" : "#fff",
+                            color: checked ? "var(--coral)" : "var(--navy)",
+                            transition: "all 0.2s"
+                          }}>
                             <input
                               type="checkbox"
                               checked={checked}
@@ -1431,14 +1440,12 @@ export default function CollegeDashboardPage() {
                                   setNewJudgeSlots(newJudgeSlots.filter(id => id !== s.id));
                                 }
                               }}
+                              style={{ display: "none" }}
                             />
                             {s.label}
                           </label>
                         );
                       })}
-                      {slots.length === 0 && (
-                        <span style={{ fontSize: "12px", color: "var(--slate-2)", fontStyle: "italic" }}>No slots available</span>
-                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
@@ -1467,9 +1474,9 @@ export default function CollegeDashboardPage() {
                           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                             <div className="avatar" style={{ background: "var(--navy-2)", flexShrink: 0 }}>{initials(j.name)}</div>
                             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", maxWidth: "100%" }}>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--navy)" }}>{j.name}</div>
-                                <span className="badge badge-amber" style={{ fontSize: 10, padding: "2px 6px" }}>
+                                <span className="badge badge-amber" style={{ fontSize: 10, padding: "2px 6px", maxWidth: "150px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={slotLabels}>
                                   {slotLabels}
                                 </span>
                               </div>
