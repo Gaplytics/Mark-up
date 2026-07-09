@@ -148,7 +148,7 @@ export default function CollegeDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newStudent.name.trim(),
-          email: newStudent.email.trim(),
+          email: emailLower,
           phone: newStudent.phone.trim(),
           collegeId: collegeAdminId,
           slotId: null,
@@ -318,7 +318,7 @@ export default function CollegeDashboardPage() {
                 newStudents.push({
                   id: "ST_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
                   name: String(name).trim(),
-                  email: emailStr,
+                  email: emailLower,
                   phone: phoneStr,
                   collegeId: collegeAdminId,
                   college: collegeAdminName,

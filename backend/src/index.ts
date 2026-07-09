@@ -459,7 +459,7 @@ app.post('/api/student/send-otp', async (req: Request, res: Response): Promise<a
     const { data: student, error } = await supabaseAdmin
       .from('students')
       .select('*, teams:teams!students_team_id_fkey(leader_id)')
-      .eq('email', normalizedEmail)
+      .ilike('email', normalizedEmail)
       .maybeSingle();
 
     if (error || !student) {
@@ -536,7 +536,7 @@ app.post('/api/student/verify-otp', async (req: Request, res: Response): Promise
     const { data: student, error } = await supabaseAdmin
       .from('students')
       .select('*, teams:teams!students_team_id_fkey(id, name, leader_id, qualified_r3)')
-      .eq('email', normalizedEmail)
+      .ilike('email', normalizedEmail)
       .single();
 
     if (error || !student) {
@@ -1054,7 +1054,9 @@ app.post('/api/students', async (req: Request, res: Response): Promise<any> => {
     return res.status(400).json({ success: false, error: 'Missing required fields' });
   }
 
-  if (!student.email.includes('@')) {
+  const normalizedEmail = student.email.trim().toLowerCase();
+
+  if (!normalizedEmail.includes('@')) {
     return res.status(400).json({ success: false, error: 'Invalid email address' });
   }
 
@@ -1067,17 +1069,17 @@ app.post('/api/students', async (req: Request, res: Response): Promise<any> => {
     const tempPassword = Math.random().toString(36).substring(2, 10) + "Ab1!";
     let userId;
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: student.email,
+      email: normalizedEmail,
       password: tempPassword,
       email_confirm: true,
     });
 
     if (authError) {
       if (authError.status === 422 || authError.message.includes('email_exists') || authError.code === 'email_exists') {
-        console.log(`User ${student.email} already exists in Auth. Trying to fetch existing user...`);
+        console.log(`User ${normalizedEmail} already exists in Auth. Trying to fetch existing user...`);
         const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
         if (usersData && usersData.users) {
-          const existingUser = usersData.users.find(u => u.email === student.email);
+          const existingUser = usersData.users.find(u => u.email === normalizedEmail);
           if (existingUser) {
             userId = existingUser.id;
             // Optionally update password if needed: await supabaseAdmin.auth.admin.updateUserById(userId, { password: tempPassword });
@@ -1101,7 +1103,7 @@ app.post('/api/students', async (req: Request, res: Response): Promise<any> => {
       .insert([{
         id: userId,
         name: student.name,
-        email: student.email,
+        email: normalizedEmail,
         phone: student.phone,
         college_id: student.collegeId,
         slot_id: student.slotId,
@@ -1196,6 +1198,7 @@ app.post('/api/students/bulk', async (req: Request, res: Response): Promise<any>
       if (!s.email || !s.email.includes('@')) {
         return res.status(400).json({ success: false, error: `Invalid email address for ${s.name || 'student'}` });
       }
+      const normalizedEmail = s.email.trim().toLowerCase();
       if (!/^\d{10}$/.test(s.phone)) {
         return res.status(400).json({ success: false, error: `Mobile number must be exactly 10 digits for ${s.name || 'student'}` });
       }
@@ -1203,7 +1206,7 @@ app.post('/api/students/bulk', async (req: Request, res: Response): Promise<any>
       try {
         const tempPassword = Math.random().toString(36).substring(2, 10) + "Ab1!";
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-          email: s.email,
+          email: normalizedEmail,
           password: tempPassword,
           email_confirm: true,
         });
@@ -1211,20 +1214,20 @@ app.post('/api/students/bulk', async (req: Request, res: Response): Promise<any>
         let userId;
         if (authError) {
           if (authError.status === 422 || authError.message.includes('email_exists') || authError.code === 'email_exists') {
-            console.log(`User ${s.email} already exists in Auth. Trying to fetch existing user...`);
+            console.log(`User ${normalizedEmail} already exists in Auth. Trying to fetch existing user...`);
             const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
             if (usersData && usersData.users) {
-              const existingUser = usersData.users.find(u => u.email === s.email);
+              const existingUser = usersData.users.find(u => u.email === normalizedEmail);
               if (existingUser) {
                 userId = existingUser.id;
               } else {
-                throw new Error(`Could not fetch users to resolve email_exists for ${s.email}.`);
+                throw new Error(`Could not fetch users to resolve email_exists for ${normalizedEmail}.`);
               }
             } else {
-              throw new Error(`Could not fetch users to resolve email_exists for ${s.email}.`);
+              throw new Error(`Could not fetch users to resolve email_exists for ${normalizedEmail}.`);
             }
           } else {
-            throw new Error(`Auth error for ${s.email}: ${authError.message}`);
+            throw new Error(`Auth error for ${normalizedEmail}: ${authError.message}`);
           }
         } else {
           userId = authData.user.id;
@@ -1233,7 +1236,7 @@ app.post('/api/students/bulk', async (req: Request, res: Response): Promise<any>
         createdStudents.push({
           id: userId,
           name: s.name,
-          email: s.email,
+          email: normalizedEmail,
           phone: s.phone,
           college_id: s.collegeId,
           slot_id: s.slotId,
