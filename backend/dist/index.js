@@ -1275,6 +1275,81 @@ app.put('/api/teams/:id/qualify', async (req, res) => {
             console.error("PUT /api/teams/:id/qualify error:", error);
             return res.status(500).json({ success: false, error: error.message });
         }
+        if (qualified_r3) {
+            // Fetch all students belonging to this team
+            const { data: members, error: membersError } = await supabase_1.supabaseAdmin
+                .from('students')
+                .select('id, name, email, phone')
+                .eq('team_id', id);
+            if (membersError) {
+                console.error("Error fetching team members for qualification email:", membersError);
+            }
+            else if (members && members.length > 0) {
+                const teamName = data.name || 'Your Team';
+                const leaderId = data.leader_id;
+                // Group members display table
+                const membersHtml = members.map((m) => {
+                    const isLeader = m.id === leaderId;
+                    return `<tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; font-weight: ${isLeader ? 'bold' : 'normal'};">
+              ${m.name} ${isLeader ? '<span style="color: #FF5A5F; font-size: 11px; margin-left: 6px; padding: 2px 6px; background: #FFF0F0; border-radius: 4px; border: 1px solid #FFE0E0;">(Leader)</span>' : ''}
+            </td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.email}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #555;">${m.phone}</td>
+          </tr>`;
+                }).join('');
+                const leader = members.find((m) => m.id === leaderId);
+                if (leader) {
+                    try {
+                        const mailOptions = {
+                            from: `"MarkUp Platform" <${process.env.FROM_EMAIL || 'info@gaplytiq.com'}>`,
+                            to: leader.email,
+                            subject: `Congratulations! ${teamName} Qualified for Round 3! 🏆`,
+                            html: `
+                <div style="font-family: Arial, sans-serif; padding: 24px; color: #333; max-width: 600px; border: 1px solid #E2E8F0; border-radius: 12px; margin: 0 auto; background: #fff;">
+                  <h2 style="color: #4F46E5; margin-bottom: 6px;">Congratulations! 🎉</h2>
+                  <p style="color: #333; font-size: 15px; margin-bottom: 20px;">
+                    Hello <strong>${leader.name}</strong>,
+                  </p>
+                  <p style="color: #333; font-size: 15px; margin-bottom: 20px;">
+                    We are thrilled to inform you that your team, <strong>${teamName}</strong>, has successfully qualified for <strong>Round 3</strong> of the MarkUp competition!
+                  </p>
+
+                  <div style="background-color: #F8FAFC; padding: 14px 18px; border-radius: 8px; margin: 18px 0; border-left: 4px solid #4F46E5;">
+                    <strong>Round 3 Qualification Status:</strong> Qualified 🏆<br/>
+                    As the Team Leader, please log in to the student portal to submit your Round 3 video link.
+                  </div>
+
+                  <h3 style="color: #1a1a2e; font-size: 15px; margin-bottom: 10px;">Your Team Members</h3>
+                  <table style="width: 100%; border-collapse: collapse; border: 1px solid #eee; border-radius: 8px; overflow: hidden; margin-bottom: 20px;">
+                    <thead>
+                      <tr style="background: #f4f4f4;">
+                        <th style="padding: 8px 12px; text-align: left; font-size: 12px; color: #666; font-weight: 600;">Name</th>
+                        <th style="padding: 8px 12px; text-align: left; font-size: 12px; color: #666; font-weight: 600;">Email</th>
+                        <th style="padding: 8px 12px; text-align: left; font-size: 12px; color: #666; font-weight: 600;">Phone</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${membersHtml}
+                    </tbody>
+                  </table>
+
+                  <p style="font-size: 13px; color: #555; margin-top: 24px;">
+                    Please submit your final assets/video for Round 3 in the student portal.
+                  </p>
+                  <hr style="border: none; border-top: 1px solid #E2E8F0; margin-top: 30px;" />
+                  <p style="font-size: 11px; color: #94A3B8; text-align: center; margin: 0;">Powered by Gaplytiq · MarkUp Platform</p>
+                </div>
+              `
+                        };
+                        await transporter.sendMail(mailOptions);
+                    }
+                    catch (mailErr) {
+                        console.error(`Failed to send qualification email to ${leader.email}:`, mailErr);
+                    }
+                }
+            }
+        }
         return res.json({ success: true, team: data });
     }
     catch (err) {
