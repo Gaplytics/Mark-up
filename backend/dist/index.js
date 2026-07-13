@@ -438,7 +438,7 @@ app.post('/api/student/send-otp', async (req, res) => {
         activeOtps.set(normalizedEmail, otpCode);
         // Send email via nodemailer
         const mailOptions = {
-            from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+            from: `"MarkUp Platform" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
             to: normalizedEmail,
             subject: 'Your MarkUp Student Verification OTP',
             text: `Your OTP is ${otpCode}. It is valid for 10 minutes.`,
@@ -556,7 +556,7 @@ async function sendSlotSelectionEmail(studentId, email, name) {
     const frontendUrl = process.env.FRONTEND_URL || 'https://markup.gaplytiq.com';
     const selectUrl = `${frontendUrl}/student/select-slot?id=${studentId}`;
     const mailOptions = {
-        from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+        from: `"MarkUp Platform" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
         to: email.trim().toLowerCase(),
         subject: 'Select Your MarkUp Test Slot',
         text: `Hello ${name},\n\nYour college admin has registered you for the MarkUp competition. You can take your exam at https://markup.gaplytiq.com/.\n\nPlease select your test slot by visiting this link: ${selectUrl}`,
@@ -731,7 +731,7 @@ app.post('/api/students/:id/select-slot', async (req, res) => {
         // Send confirmation email
         try {
             const mailOptions = {
-                from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+                from: `"MarkUp Platform" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
                 to: student.email,
                 subject: 'MarkUp Test Slot Confirmed',
                 html: `
@@ -1442,7 +1442,7 @@ app.post('/api/teams/notify', async (req, res) => {
                 👤 <strong>Team Leader:</strong> <strong>${leaderName}</strong> has been appointed as your Team Leader. Only they can submit video links for your team.
               </div>`;
                     const mailOptions = {
-                        from: `"MarkUp Platform" <${process.env.SMTP_USER}>`,
+                        from: `"MarkUp Platform" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
                         to: member.email,
                         subject: `MarkUp – You're in ${groupName}!`,
                         html: `
